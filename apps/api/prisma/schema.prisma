@@ -1,0 +1,616 @@
+// Rivora protocol schema.
+//
+// Money is stored as `Decimal(20, 6)` throughout, never as a float. USDC has
+// six decimal places, and a double cannot hold a repayment split exactly —
+// interest-before-principal arithmetic that drifts by a millionth is a
+// reconciliation bug that surfaces months later as an unclosable loan. The
+// service layer converts to `number` only at the presentation boundary, where
+// the values are already rounded for display.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Borrower lifecycle. PRD §17 credit-state machine.
+enum BorrowerStatus {
+  OBSERVATION
+  ELIGIBLE
+  ACTIVE
+  WATCH
+  RESTRICTED
+  DELINQUENT
+  DEFAULTED
+  REPAID
+}
+
+/// Score bands. PRD §14.2.
+enum Tier {
+  Prime
+  Strong
+  Standard
+  Restricted
+  Ineligible
+}
+
+/// How revenue reaches the protocol. PRD §11.2.
+///
+/// An underwriting input rather than an implementation detail: it bounds the
+/// maximum advance rate, because it decides whether repayment is structural
+/// (A), policy-enforced (B) or merely behavioural (C).
+enum CustodyModel {
+  A
+  B
+  C
+}
+
+/// Which surface an address may enter.
+enum Role {
+  borrower
+  lp
+  ops
+  partner
+}
+
+/// A registered machine business.
+model Borrower {
+  id              String       @id @default(cuid())
+  /// Public protocol handle, e.g. `0x9c4e…a7f1`. Shown on the reputation page.
+  handle          String       @unique
+  serviceName     String
+  category        String
+  endpoint        String
+  /// Hash of the endpoint binding written onchain.
+  endpointHash    String?
+  /// Revenue Router the endpoint's advertised `payTo` must match.
+  routerAddress   String?
+  operatingWallet String
+  ownerWallet     String
+  custody         CustodyModel @default(A)
+  operator        String?
+  jurisdiction    String?
+  kybVerifiedAt   DateTime?
+  registeredAt    DateTime     @default(now())
+
+  creditLine    CreditLine?
+  revenueWindow RevenueWindow?
+  health        ServiceHealth?
+  policy        AgentPolicy?
+  events        ActivityEvent[]
+  alerts        Alert[]
+  defaults      DefaultRecord[]
+  assessments   Assessment[]
+  customers     PayerSummary[]
+  revenueDays   RevenueDay[]
+  reserveEvents ReserveEvent[]
+  decisions     PolicyDecision[]
+  allowlist     AllowlistEntry[]
+  upstream      UpstreamDependency[]
+  anomalies     Anomaly[]
+
+  @@index([handle])
+}
+
+/// A completed underwriting assessment. PRD §14.
+///
+/// Kept as history rather than overwritten, because the limit shown to a
+/// borrower is only defensible if the path to it can be reconstructed.
+model Assessment {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  at            DateTime @default(now())
+  score         Int
+  tier          Tier
+  limitAmount   Decimal  @db.Decimal(20, 6)
+  previousLimit Decimal  @db.Decimal(20, 6)
+  /// Which rung of the constraint ladder decided the limit.
+  bindingKey    String
+  /// The full ladder, as shown on the credit screen.
+  ladder        Json
+  model         String   @default("riv-uw-2.1")
+
+  @@index([borrowerId, at(sort: Desc)])
+}
+
+/// Aggregated per-payer revenue.
+///
+/// Aggregate only. Payer addresses are never exposed through the API — the
+/// concentration and diversity factors need the distribution, not identities.
+model PayerSummary {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  /// Stable pseudonymous label, e.g. `payer-01`.
+  label           String
+  revenue30d      Decimal  @db.Decimal(20, 6)
+  sharePct        Float
+  firstSeenAt     DateTime
+  requests30d     Int
+  /// True when the payer's revenue was excluded from the eligible total.
+  excluded        Boolean  @default(false)
+  exclusionReason String?
+
+  @@unique([borrowerId, label])
+  @@index([borrowerId])
+}
+
+/// The borrower's credit position. One per borrower.
+model CreditLine {
+  id         String   @id @default(cuid())
+  borrowerId String   @unique
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  status        BorrowerStatus @default(OBSERVATION)
+  tier          Tier           @default(Standard)
+  score         Int            @default(0)
+  previousScore Int            @default(0)
+
+  limitAmount         Decimal  @default(0) @db.Decimal(20, 6)
+  /// Limit approved at the previous assessment. Gates the growth cap, and is
+  /// distinct from `restrictedFromLimit` — conflating the two restores a
+  /// borrower to the wrong number after a restriction is cleared.
+  previousLimit       Decimal  @default(0) @db.Decimal(20, 6)
+  /// Limit held at the moment a restriction dropped it to zero.
+  restrictedFromLimit Decimal? @db.Decimal(20, 6)
+
+  principal       Decimal @default(0) @db.Decimal(20, 6)
+  accruedInterest Decimal @default(0) @db.Decimal(20, 6)
+  pendingDraws    Decimal @default(0) @db.Decimal(20, 6)
+
+  reserve       Decimal @default(0) @db.Decimal(20, 6)
+  reserveTarget Decimal @default(0) @db.Decimal(20, 6)
+
+  /// Basis points of settled revenue routed to repayment and to the reserve.
+  repaymentBps Int @default(2000)
+  reserveBps   Int @default(200)
+
+  completedCycles Int @default(0)
+  historyDays     Int @default(0)
+
+  /// Empty string rather than null: these are enumerated reasons with a
+  /// defined "none" case, and null would invite three-valued logic in every
+  /// consumer.
+  watchReason     String  @default("")
+  restrictReason  String  @default("")
+  anomalyDetected Boolean @default(false)
+
+  principalRepaid Decimal @default(0) @db.Decimal(20, 6)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Trailing 30-day revenue metrics, recomputed by the indexer.
+model RevenueWindow {
+  id         String   @id @default(cuid())
+  borrowerId String   @unique
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  eligible  Decimal @default(0) @db.Decimal(20, 6)
+  gross     Decimal @default(0) @db.Decimal(20, 6)
+  excluded  Decimal @default(0) @db.Decimal(20, 6)
+  /// Mean settled revenue per day, the input to the repayment waterfall.
+  dailyMean Decimal @default(0) @db.Decimal(20, 6)
+
+  growthPct       Float @default(0)
+  largestPayerPct Float @default(0)
+  hhi             Float @default(0)
+  uniquePayers    Int   @default(0)
+  repeatPayers    Int   @default(0)
+
+  windowStart DateTime?
+  windowEnd   DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Protocol-observed service health and the five underwriting factors.
+model ServiceHealth {
+  id         String   @id @default(cuid())
+  borrowerId String   @unique
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  coverageRatio Float @default(0)
+  uptimePct     Float @default(0)
+  successPct    Float @default(0)
+  refundRatePct Float @default(0)
+  latencyMs     Int   @default(0)
+
+  /// True while the advertised `payTo` matches the deployed Revenue Router.
+  bindingOk  Boolean @default(true)
+  endpointUp Boolean @default(true)
+
+  /// Quality factors. PRD §13.3 — S, C, V, D, M compose the haircut; G is
+  /// applied separately because, unlike the others, it may exceed 1.
+  factorS Float @default(1)
+  factorC Float @default(1)
+  factorV Float @default(1)
+  factorD Float @default(1)
+  factorM Float @default(1)
+  factorG Float @default(1)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// The credit vault. A single row — the protocol has one book.
+model VaultState {
+  id String @id @default("singleton")
+
+  totalAssets        Decimal @default(0) @db.Decimal(20, 6)
+  availableLiquidity Decimal @default(0) @db.Decimal(20, 6)
+  protocolReserve    Decimal @default(0) @db.Decimal(20, 6)
+  firstLossTranche   Decimal @default(0) @db.Decimal(20, 6)
+  queueTotal         Decimal @default(0) @db.Decimal(20, 6)
+  realizedLosses     Decimal @default(0) @db.Decimal(20, 6)
+
+  activeBorrowers Int @default(0)
+  onWatch         Int @default(0)
+
+  routedRevenue30d  Decimal @default(0) @db.Decimal(20, 6)
+  principalRepaid   Decimal @default(0) @db.Decimal(20, 6)
+  interestGenerated Decimal @default(0) @db.Decimal(20, 6)
+
+  /// Value of one vault share, in USDC. Eight places: share price compounds
+  /// daily, and truncating it at six would leak value on every settlement.
+  sharePrice Decimal @default(1) @db.Decimal(20, 8)
+
+  /// Settlement days processed. Advanced by the keeper, never by a user.
+  day Int @default(0)
+
+  /// Incentive yield paid on top of what the book earns, and the date it stops.
+  ///
+  /// Held as protocol configuration rather than computed, because it is a
+  /// decision rather than a measurement. Reported separately from organic
+  /// yield everywhere it appears — a blended APY that quietly includes a
+  /// subsidy overstates what a depositor keeps after it ends.
+  subsidyApyPct Float     @default(0)
+  subsidyEnds   DateTime?
+  /// Protocol's cut of borrower interest, in percent.
+  protocolSpreadPct Float @default(3)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// A liquidity provider's position.
+model LpPosition {
+  id      String @id @default(cuid())
+  address String @unique
+
+  walletBalance Decimal @default(0) @db.Decimal(20, 6)
+  supplied      Decimal @default(0) @db.Decimal(20, 6)
+  shares        Decimal @default(0) @db.Decimal(20, 8)
+  /// Amount sitting in the FIFO exit queue, and the part of it already funded
+  /// by incoming repayments.
+  queued        Decimal @default(0) @db.Decimal(20, 6)
+  queueFunded   Decimal @default(0) @db.Decimal(20, 6)
+
+  depositedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Maps a wallet address to the surface it may enter.
+///
+/// Stands in for a lookup across registered services, vault share holders and
+/// operator grants. Kept as a table so the resolution is data, not code.
+model AddressRole {
+  address    String  @id
+  role       Role
+  label      String?
+  /// Set when the role is tied to a specific borrower, so a borrower session
+  /// can be scoped to its own record rather than to whichever row is first.
+  borrowerId String?
+
+  createdAt DateTime @default(now())
+}
+
+/// A single-use challenge for Sign-In With Ethereum.
+///
+/// Persisted rather than held in memory: nonces have to survive a restart and
+/// be consumed exactly once across every replica, and an in-process Set gives
+/// neither. `consumedAt` marks use — the row is kept so a replayed signature
+/// can be told apart from an expired one when reading logs.
+model AuthNonce {
+  nonce      String    @id
+  address    String
+  issuedAt   DateTime  @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([address])
+  @@index([expiresAt])
+}
+
+/// An API key issued to a partner consuming the Score API.
+///
+/// Only the hash is stored. A leaked database should not hand an attacker
+/// working credentials, and the plaintext is shown exactly once at issue.
+model ApiKey {
+  id         String    @id @default(cuid())
+  /// Non-secret identifier shown in dashboards and logs, e.g. `pk_live_8f2`.
+  label      String
+  /// SHA-256 of the full key.
+  keyHash    String    @unique
+  /// First characters of the key, for recognising it in a list.
+  prefix     String
+  scopes     String[]  @default([])
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([keyHash])
+}
+
+/// An append-only record of privileged actions.
+///
+/// Risk-operator decisions move other people's money and mark records that
+/// cannot be deleted, so who did what has to be answerable later. There is no
+/// update or delete path.
+model AuditLog {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  /// Wallet address or API-key label of the actor.
+  actor     String
+  role      Role?
+  action    String
+  /// Entity the action was taken against.
+  subject   String?
+  /// Request correlation id, for joining to application logs.
+  requestId String?
+  ip        String?
+  metadata  Json?
+
+  @@index([at(sort: Desc)])
+  @@index([actor])
+}
+
+/// Records a completed mutation against its idempotency key.
+///
+/// A retried draw must not draw twice. The stored response is replayed for a
+/// repeated key, so a client that lost the first response can safely ask again.
+model IdempotencyRecord {
+  key         String   @id
+  /// Endpoint the key was used against. The same key on a different route is
+  /// a client bug, not a retry, and is rejected rather than silently replayed.
+  route       String
+  /// Hash of the request body, so a key reused with different arguments is
+  /// caught instead of returning the first call's answer.
+  requestHash String
+  statusCode  Int
+  response    Json
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// The agent wallet policy a borrower's draws are spent within. PRD §16.
+model AgentPolicy {
+  id         String   @id @default(cuid())
+  borrowerId String   @unique
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  maxPayment             Decimal   @default(100) @db.Decimal(20, 6)
+  maxDaily               Decimal   @default(500) @db.Decimal(20, 6)
+  spentToday             Decimal   @default(0) @db.Decimal(20, 6)
+  /// Draws above this need an owner-wallet signature.
+  humanApprovalThreshold Decimal   @default(250) @db.Decimal(20, 6)
+  allowedCategories      String[]  @default([])
+  blockedCategories      String[]  @default([])
+  /// Policy changes take effect after this delay, so a compromised agent
+  /// cannot widen its own limits and immediately drain the line.
+  policyChangeDelayHours Int       @default(24)
+  /// Set while a change is pending; applied once the delay elapses.
+  pendingChangeAt        DateTime?
+
+  updatedAt DateTime @updatedAt
+}
+
+/// The public protocol event stream.
+model ActivityEvent {
+  id     String   @id @default(cuid())
+  /// Wall-clock instant. Ordering keys off this, not off the cuid.
+  at     DateTime @default(now())
+  type   String
+  /// Public handle of the actor. Never a payer address — payer identity is
+  /// deliberately absent from this stream.
+  who    String
+  /// Pre-formatted for display, including the unit, or an em dash. The stream
+  /// carries amounts of different kinds (USDC, percentages, none at all) and a
+  /// numeric column would force every consumer to re-derive which is which.
+  amount String
+  txHash String
+  note   String?
+
+  borrowerId String?
+  borrower   Borrower? @relation(fields: [borrowerId], references: [id], onDelete: SetNull)
+
+  @@index([at(sort: Desc)])
+  @@index([borrowerId])
+}
+
+/// A borrower-facing notification.
+model Alert {
+  id     String   @id @default(cuid())
+  at     DateTime @default(now())
+  icon   String
+  title  String
+  body   String?
+  unread Boolean  @default(true)
+  txHash String?
+  href   String?
+  cta    String?
+
+  borrowerId String?
+  borrower   Borrower? @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  @@index([at(sort: Desc)])
+}
+
+/// The permanent default registry.
+///
+/// There is no delete path, by design: the registry's value to third parties
+/// depends on it being non-negotiable. A default may be cured; the record of
+/// it remains.
+model DefaultRecord {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Restrict)
+
+  declaredAt DateTime  @default(now())
+  curedAt    DateTime?
+
+  principal Decimal @db.Decimal(20, 6)
+  recovered Decimal @default(0) @db.Decimal(20, 6)
+
+  trigger      String
+  evidenceHash String
+  /// True when declared by the protocol rather than by an operator.
+  automatic    Boolean @default(true)
+
+  @@index([borrowerId])
+}
+
+/// One settled day of revenue.
+///
+/// The daily series is not decoration: revenue *consistency* is a weighted
+/// score signal, and consistency cannot be read from a 30-day mean. Stored per
+/// day so the coefficient of variation is computed from observation rather
+/// than assumed.
+model RevenueDay {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  /// Date only. Settlement is netted per day, so there is one row per day.
+  date     DateTime @db.Date
+  settled  Decimal  @default(0) @db.Decimal(20, 6)
+  /// Portion excluded from underwriting — wash activity, refunds, self-funding.
+  excluded Decimal  @default(0) @db.Decimal(20, 6)
+  requests Int      @default(0)
+
+  @@unique([borrowerId, date])
+  @@index([borrowerId, date(sort: Desc)])
+}
+
+/// Movement in the borrower's loss reserve.
+model ReserveEvent {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  at      DateTime @default(now())
+  /// `contribution`, `applied`, `released`, `topup`.
+  type    String
+  /// Signed: negative when the reserve is drawn down.
+  amount  Decimal  @db.Decimal(20, 6)
+  /// Reserve balance immediately after this event.
+  balance Decimal  @db.Decimal(20, 6)
+  txHash  String?
+  note    String?
+
+  @@index([borrowerId, at(sort: Desc)])
+}
+
+/// A destination the agent may spend a draw to.
+///
+/// An allowlist is what makes a compromised agent's spending bounded rather
+/// than merely capped: a stolen key can spend up to the daily limit, but only
+/// to addresses the owner registered.
+model AllowlistEntry {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  address    String
+  name       String
+  category   String
+  lastUsedAt DateTime?
+  addedAt    DateTime  @default(now())
+
+  @@unique([borrowerId, address])
+}
+
+/// One evaluation of the agent policy against an attempted payment.
+///
+/// Written for rejections as well as approvals — a policy nobody can audit
+/// after the fact is indistinguishable from no policy.
+model PolicyDecision {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  at        DateTime @default(now())
+  recipient String
+  amount    Decimal  @db.Decimal(20, 6)
+  category  String
+  /// `allowed`, `rejected`, `queued`.
+  outcome   String
+  /// Why, in the operator's words. Empty for a plain approval.
+  reason    String   @default("")
+
+  @@index([borrowerId, at(sort: Desc)])
+}
+
+/// A service the borrower depends on to fulfil requests.
+///
+/// Concentration risk runs upstream as well as down: a borrower whose revenue
+/// is diverse but whose delivery depends on one model provider fails the same
+/// way if that provider does.
+model UpstreamDependency {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  name            String
+  category        String
+  /// Share of the borrower's cost base, self-declared.
+  declaredCostPct Float   @default(0)
+  /// Share of protocol principal exposed through this dependency.
+  sharePct        Float   @default(0)
+  substitutable   Boolean @default(true)
+
+  @@unique([borrowerId, name])
+}
+
+/// A detected revenue-manipulation event. PRD §17.
+model Anomaly {
+  id         String   @id @default(cuid())
+  /// Human reference, e.g. `A-0142`.
+  reference  String   @unique
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  /// `Circular funding`, `Wash activity`, `Refund abuse`.
+  kind               String
+  detectedAt         DateTime @default(now())
+  /// Revenue removed from the eligible base.
+  washAmount         Decimal  @db.Decimal(20, 6)
+  payerCount         Int
+  daysSpanned        Int
+  /// Revenue net of the gas and fees spent generating it. Negative proves the
+  /// activity was not economic.
+  netEconomicRevenue Decimal  @db.Decimal(20, 6)
+
+  /// Onchain evidence commitment, and the transaction that wrote it.
+  evidenceHash String
+  txHash       String
+
+  /// Ordered evidence rows and the wallets involved, as shown to the operator.
+  /// Display-only: nothing branches on their contents, so a table per shape
+  /// would buy structure the protocol never reads.
+  evidence      Json
+  fundedWallets Json
+
+  /// Borrower state after the write-back, for the before/after comparison.
+  afterEligibleRevenue Decimal @db.Decimal(20, 6)
+  afterScore           Int
+  afterTier            Tier
+  afterLimit           Decimal @db.Decimal(20, 6)
+  afterRepaymentBps    Int
+
+  @@index([borrowerId, detectedAt(sort: Desc)])
+}

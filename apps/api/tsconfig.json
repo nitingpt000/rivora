@@ -1,0 +1,15 @@
+{
+  "extends": "@rivora/typescript-config/nestjs.json",
+  /**
+   * No path aliases. `tsc` does not rewrite them on emit, so an alias used in
+   * a value position would survive into `dist` and fail at runtime. Workspace
+   * packages resolve through their `exports` field, and everything local uses
+   * a relative path.
+   *
+   * `vitest.config.ts` is excluded on purpose: it is ESM and imports ESM-only
+   * tooling, which a CommonJS program cannot typecheck. Vitest loads it
+   * through its own pipeline, which has no such constraint.
+   */
+  "include": ["src", "prisma"],
+  "exclude": ["node_modules", "dist", ".turbo"]
+}
