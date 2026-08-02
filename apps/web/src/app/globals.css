@@ -1,0 +1,4 @@
+/* The Industry design system, then the Rivora application layer. Order matters:
+   rivora.css defines semantic roles that reference industry.css tokens. */
+@import '@rivora/tokens/industry.css';
+@import '@rivora/tokens/rivora.css';

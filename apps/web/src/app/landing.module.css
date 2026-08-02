@@ -1,0 +1,791 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Landing page.
+
+   The one screen that has to argue rather than report. Everything here is
+   composed from Industry tokens — no new hue, no new type face. The dark band
+   is `--color-accent-900`, already the product's testnet strip; it marks the
+   hero as *inside the machine*, and the page returns to the blueprint ground
+   directly after.
+
+   Three typographic voices, each carrying meaning:
+     mono            → machine-emitted figures (amounts, hashes, counts)
+     heading caps    → protocol structure (channel names, section heads)
+     body            → explanation addressed to a person
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── the machine band ──────────────────────────────────────────────────── */
+
+.hero {
+  background: var(--color-accent-900);
+  color: var(--color-accent-100);
+  border-bottom: 1px solid var(--color-accent-800);
+  overflow: hidden;
+}
+
+.heroInner {
+  max-width: var(--measure-wide);
+  margin: 0 auto;
+  padding: 76px var(--gutter) 84px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 56px;
+  align-items: center;
+}
+
+.heroCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent-400);
+  margin: 0 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The eyebrow's rule runs to the edge of the column — a drawing convention,
+   and it stops the label floating unanchored above the headline. */
+.eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-accent-800);
+}
+
+.headline {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(42px, 5.6vw, 72px);
+  line-height: 0.98;
+  letter-spacing: 0.005em;
+  margin: 0 0 22px;
+  color: #fff;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--color-accent-300);
+  max-width: 46ch;
+  margin: 0 0 14px;
+  text-wrap: pretty;
+}
+
+/* The clause the whole product rests on, so it is set apart rather than
+   buried mid-paragraph. */
+.leadEmphasis {
+  color: #fff;
+  font-weight: 500;
+}
+
+.heroActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 30px;
+}
+
+.heroNote {
+  margin: 26px 0 0;
+  font-size: 12.5px;
+  color: var(--color-accent-500);
+  font-family: var(--font-mono);
+}
+
+/* The system's secondary and ghost buttons are drawn for the light ground:
+   an ink-derived border and a mid accent, both of which disappear against
+   `--color-accent-900`. Scoped to the hero so the same class keeps its normal
+   appearance in the liquidity-provider band below. */
+.hero .heroActions :global(.btn-secondary) {
+  border-color: var(--color-accent-500);
+  color: #fff;
+}
+
+.hero .heroActions :global(.btn-secondary:hover) {
+  background: color-mix(in srgb, #fff 12%, transparent);
+  border-color: var(--color-accent-300);
+}
+
+.hero .heroActions :global(.btn-ghost) {
+  color: var(--color-accent-300);
+}
+
+.hero .heroActions :global(.btn-ghost:hover) {
+  background: color-mix(in srgb, #fff 10%, transparent);
+  color: #fff;
+}
+
+/* ── the router instrument ─────────────────────────────────────────────── */
+
+.router {
+  border: 1px solid var(--color-accent-700);
+  background: color-mix(in srgb, #000 22%, var(--color-accent-900));
+  padding: 18px 20px 16px;
+  min-width: 0;
+}
+
+.routerHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-accent-800);
+}
+
+.routerTitle {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent-300);
+}
+
+.routerState {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent-400);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routerDot {
+  width: 6px;
+  height: 6px;
+  background: var(--color-accent-300);
+  display: inline-block;
+}
+
+.routerDotLive {
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* — the incoming signal trace —
+   A marquee of hairline ticks standing in for per-request payments. The track
+   is duplicated end to end and translated by exactly half its width, which is
+   what makes the loop seamless. */
+
+.trace {
+  position: relative;
+  height: 46px;
+  margin: 14px 0 4px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 84%, transparent);
+}
+
+.traceTrack {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  height: 100%;
+  width: max-content;
+  animation: flow 14s linear infinite;
+}
+
+@keyframes flow {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tick {
+  width: 2px;
+  background: var(--color-accent-500);
+  flex: none;
+}
+
+/* Every fourth tick is brighter — a settled payment against unsettled
+   authorizations, which is the distinction the underwriter actually cares
+   about. */
+.tickSettled {
+  background: var(--color-accent-300);
+}
+
+.traceMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent-500);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-accent-800);
+}
+
+/* — the batch accumulator — */
+
+.batch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+
+.batchLabel {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent-400);
+  flex: none;
+  width: 52px;
+}
+
+.batchBar {
+  flex: 1;
+  height: 8px;
+  background: color-mix(in srgb, #000 30%, var(--color-accent-900));
+  border: 1px solid var(--color-accent-800);
+  position: relative;
+  overflow: hidden;
+}
+
+.batchFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-accent-400);
+  transition: width 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.batchValue {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  width: 92px;
+  text-align: right;
+}
+
+/* — the three channels —
+   One ramp, three steps: the protocol's cut is brightest because it is the
+   claim the page is making. */
+
+.channels {
+  border-top: 1px solid var(--color-accent-800);
+  padding-top: 14px;
+  display: grid;
+  gap: 9px;
+}
+
+.channel {
+  display: grid;
+  grid-template-columns: 78px 34px minmax(0, 1fr) 84px;
+  align-items: center;
+  gap: 10px;
+}
+
+.channelName {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent-300);
+}
+
+.channelShare,
+.channelValue {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-400);
+}
+
+.channelValue {
+  text-align: right;
+  color: #fff;
+}
+
+.channelTrack {
+  height: 6px;
+  background: color-mix(in srgb, #000 30%, var(--color-accent-900));
+  position: relative;
+}
+
+.channelBar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  transition: opacity 220ms ease;
+}
+
+.channelRepayment {
+  background: var(--color-accent-300);
+}
+.channelReserve {
+  background: var(--color-accent-500);
+}
+.channelOperating {
+  background: var(--color-accent-700);
+}
+
+/* The settle beat: the instant the batch clears, the channels take their cut.
+   One flash across all three, not three separate effects. */
+.settling .channelBar {
+  opacity: 0.35;
+}
+
+.routerFoot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-accent-800);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.routerFootValue {
+  color: #fff;
+}
+
+/* ── shared section furniture ──────────────────────────────────────────── */
+
+.section {
+  max-width: var(--measure-wide);
+  margin: 0 auto;
+  padding: 68px var(--gutter);
+}
+
+.sectionTight {
+  padding-top: 12px;
+}
+
+.sectionHead {
+  margin-bottom: 30px;
+  max-width: 62ch;
+}
+
+.sectionKicker {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin: 0 0 12px;
+  display: block;
+}
+
+.sectionTitle {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.06;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+
+.sectionLead {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+  margin: 0;
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+
+/* ── live protocol state ───────────────────────────────────────────────── */
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--color-neutral-400);
+  border-left: 1px solid var(--color-neutral-400);
+}
+
+.stateCell {
+  border-right: 1px solid var(--color-neutral-400);
+  border-bottom: 1px solid var(--color-neutral-400);
+  padding: 20px 22px;
+}
+
+/* The three figures that decide whether a liquidity provider reads further
+   get the full measure; the rest are context. */
+.stateCellLead {
+  grid-column: span 1;
+  background: var(--color-neutral-100);
+}
+
+.stateLabel {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin-bottom: 8px;
+}
+
+.stateValue {
+  font-family: var(--font-mono);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.stateValueSm {
+  font-size: 19px;
+}
+
+.stateUnit {
+  font-size: 0.55em;
+  color: var(--color-neutral-600);
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+
+.stateMeter {
+  height: 4px;
+  background: var(--color-neutral-300);
+  margin-top: 10px;
+  position: relative;
+}
+
+.stateMeterFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-accent-700);
+}
+
+.statePending {
+  color: var(--color-neutral-500);
+}
+
+/* ── the cycle ─────────────────────────────────────────────────────────── */
+
+.cycle {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--color-neutral-400);
+}
+
+.step {
+  padding: 26px 24px 30px;
+  border-right: 1px solid var(--color-neutral-400);
+  position: relative;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 480ms ease,
+    transform 480ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.step:last-child {
+  border-right: 0;
+}
+
+.isVisible .step {
+  opacity: 1;
+  transform: none;
+}
+
+/* Staggered so the eye reads the sequence in order — the order is the
+   content here, not a flourish. Kept under a second end to end: a reader who
+   scrolls quickly should never catch the section mid-reveal and see nothing. */
+.isVisible .step:nth-child(1) {
+  transition-delay: 0ms;
+}
+.isVisible .step:nth-child(2) {
+  transition-delay: 90ms;
+}
+.isVisible .step:nth-child(3) {
+  transition-delay: 180ms;
+}
+.isVisible .step:nth-child(4) {
+  transition-delay: 270ms;
+}
+
+/* The marker sits on the top rule, so the sequence reads along the rule
+   rather than floating inside each cell. */
+.stepMark {
+  position: absolute;
+  top: -1px;
+  left: 24px;
+  height: 3px;
+  width: 34px;
+  background: var(--color-accent-700);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.isVisible .stepMark {
+  transform: scaleX(1);
+}
+
+.isVisible .step:nth-child(1) .stepMark {
+  transition-delay: 40ms;
+}
+.isVisible .step:nth-child(2) .stepMark {
+  transition-delay: 130ms;
+}
+.isVisible .step:nth-child(3) .stepMark {
+  transition-delay: 220ms;
+}
+.isVisible .step:nth-child(4) .stepMark {
+  transition-delay: 310ms;
+}
+
+.stepNum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent-700);
+  letter-spacing: 0.08em;
+}
+
+.stepName {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin: 2px 0 12px;
+}
+
+.stepTitle {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.15;
+  margin: 0 0 10px;
+}
+
+.stepBody {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  margin: 0 0 14px;
+}
+
+.stepFigure {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-accent-700);
+  font-variant-numeric: tabular-nums;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-neutral-300);
+}
+
+/* The return edge — this is a loop, and the loop is the argument: every
+   completed cycle is evidence, and evidence raises the limit. */
+.returnEdge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--color-neutral-400);
+  padding: 14px 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-accent-700);
+  opacity: 0;
+  transition: opacity 480ms ease 400ms;
+}
+
+.isVisible .returnEdge {
+  opacity: 1;
+}
+
+.returnLine {
+  flex: 1;
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-accent-400) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+/* ── structural guarantees ─────────────────────────────────────────────── */
+
+/* Rules are drawn by the cells, not by a background showing through a 1px
+   gap: at two columns the third guarantee leaves an empty grid cell, and the
+   gap technique paints that emptiness as a solid grey block. */
+.guarantees {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--color-neutral-400);
+  border-left: 1px solid var(--color-neutral-400);
+}
+
+.guarantee {
+  border-right: 1px solid var(--color-neutral-400);
+  border-bottom: 1px solid var(--color-neutral-400);
+  padding: 24px 24px 26px;
+}
+
+.guaranteeIndex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-neutral-500);
+  margin-bottom: 14px;
+}
+
+.guaranteeTitle {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+
+.guaranteeBody {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+  margin: 0;
+}
+
+.guaranteeProof {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-neutral-300);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-700);
+}
+
+/* ── liquidity provider band ───────────────────────────────────────────── */
+
+.lp {
+  border-top: 1px solid var(--color-neutral-400);
+  background: var(--color-neutral-100);
+}
+
+.lpInner {
+  max-width: var(--measure-wide);
+  margin: 0 auto;
+  padding: 60px var(--gutter);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: center;
+}
+
+.lpFigures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--color-neutral-400);
+  border-left: 1px solid var(--color-neutral-400);
+}
+
+.lpFigure {
+  border-right: 1px solid var(--color-neutral-400);
+  border-bottom: 1px solid var(--color-neutral-400);
+  padding: 18px 20px;
+  background: var(--color-bg);
+}
+
+/* ── disclaimer ────────────────────────────────────────────────────────── */
+
+.disclaimer {
+  max-width: var(--measure-wide);
+  margin: 0 auto;
+  padding: 0 var(--gutter) 72px;
+}
+
+.disclaimerInner {
+  border: 1px solid var(--color-neutral-400);
+  padding: 16px 20px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+}
+
+/* ── responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+  .heroInner,
+  .lpInner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+
+  .cycle,
+  .guarantees {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .step:nth-child(2) {
+    border-right: 0;
+  }
+
+  /* The top rule no longer separates the wrapped second row, so the first
+     row draws its own floor. */
+  .step:nth-child(1),
+  .step:nth-child(2) {
+    border-bottom: 1px solid var(--color-neutral-400);
+  }
+}
+
+@media (max-width: 720px) {
+  .heroInner {
+    padding: 52px var(--gutter) 60px;
+  }
+
+  .section {
+    padding: 48px var(--gutter);
+  }
+
+  .stateGrid,
+  .cycle,
+  .guarantees,
+  .lpFigures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .step,
+  .step:nth-child(2) {
+    border-right: 0;
+  }
+
+  .channel {
+    grid-template-columns: 70px 30px minmax(0, 1fr);
+  }
+
+  /* The running total drops on narrow screens — the share and the bar carry
+     the point, and a fourth column here would crush all of them. */
+  .channelValue {
+    display: none;
+  }
+}
+
+/* ── reduced motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .traceTrack,
+  .routerDotLive {
+    animation: none;
+  }
+
+  .step,
+  .stepMark,
+  .returnEdge {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
