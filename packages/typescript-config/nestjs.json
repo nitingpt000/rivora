@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "NestJS",
+  "extends": "./base.json",
+  "compilerOptions": {
+    /**
+     * CommonJS, not the workspace default of ESNext + Bundler resolution.
+     * Nest's dependency injection reads `design:paramtypes` metadata that only
+     * the legacy decorator transform emits, and that transform is only
+     * available on a tsc CommonJS pipeline. ESM Nest is possible but trades a
+     * working setup for a fashionable one.
+     */
+    /**
+     * `Node16` rather than plain CommonJS resolution: it still emits CJS for a
+     * package without `"type": "module"`, but it understands the `exports`
+     * field — which is how `@rivora/core` serves a CommonJS build to this app
+     * while continuing to serve TypeScript source to the bundlers.
+     */
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    /**
+     * `verbatimModuleSyntax` would preserve `import type` statements verbatim,
+     * which is exactly wrong here: Nest needs the *runtime value* of an
+     * injected class to use it as a DI token, and this flag interacts badly
+     * with the metadata transform.
+     */
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+
+    /**
+     * DTOs are populated by the framework and by plain object literals, never
+     * by a constructor, so every property would otherwise need a `!`. Relaxed
+     * here only — the rest of the workspace keeps the strict default.
+     */
+    "strictPropertyInitialization": false,
+
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "incremental": true
+
+    /**
+     * `outDir` and `rootDir` are deliberately absent. Both resolve relative to
+     * the directory holding the config that declares them — so setting them
+     * here would point every consumer at `packages/typescript-config`. They
+     * belong in the app's own `tsconfig.build.json`.
+     */
+  },
+  "exclude": ["node_modules", "dist", ".turbo"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "rivora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rivora — stablecoin-native credit protocol for machine businesses. Turborepo monorepo.",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\" --ignore-path .gitignore",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "// onlyBuiltDependencies": "pnpm 10 blocks postinstall scripts by default. These four genuinely need theirs: Prisma downloads its query engine, and SWC and esbuild fetch platform-native binaries. Everything else stays blocked.",
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "@swc/core",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}

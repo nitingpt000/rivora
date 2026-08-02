@@ -1,0 +1,27 @@
+# Keeps the build context small and stops host artefacts leaking into the
+# image — a copied node_modules would carry the host's platform binaries, which
+# is how "works on my machine" becomes "works in my container only".
+
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+
+.git
+.github
+.vscode
+.idea
+
+# Secrets never enter the build context. The compose stack injects them.
+**/.env
+**/.env.local
+**/.env.*.local
+
+**/*.log
+.DS_Store
+
+# Large docs the image has no use for.
+PRD.md
+screens.md

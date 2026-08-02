@@ -1,0 +1,46 @@
+node_modules
+.pnpm-store
+
+# build output
+dist
+.next
+out
+build
+*.tsbuildinfo
+
+# turbo
+.turbo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# Circle entity-secret recovery files. The only way to reset an entity secret,
+# and Circle does not keep a copy — committing one hands over control of every
+# developer-controlled wallet.
+#
+# Anchored to contracts/: an unanchored `recovery/` matches any directory of
+# that name, which silently excluded the borrower recovery screen's source.
+/contracts/recovery/
+*.dat
+
+# Foundry
+contracts/out
+contracts/cache
+contracts/broadcast
+contracts/lib/openzeppelin-contracts
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / os
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# test
+coverage

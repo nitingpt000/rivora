@@ -1,0 +1,63 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["**/.env.*local"],
+  /**
+   * Build-time configuration. All are `NEXT_PUBLIC_`, so they are inlined into
+   * the client bundle and are public by definition — a change to any of them
+   * invalidates the build cache. See `.env.example`.
+   */
+  "globalEnv": [
+    "NODE_ENV",
+    "API_BASE_URL",
+    "ARC_CHAIN_ID",
+    "ARC_RPC_URL",
+    "CHAIN_MODE",
+    "CORS_ORIGINS",
+    "CREDIT_MANAGER_ADDRESS",
+    "CREDIT_VAULT_ADDRESS",
+    "DATABASE_URL",
+    "RISK_REGISTRY_ADDRESS",
+    "JWT_SECRET",
+    "JWT_TTL_SECONDS",
+    "PORT",
+    "WEB_ORIGIN",
+    "SIWE_DOMAINS",
+    "SWAGGER_ENABLED",
+    "THROTTLE_LIMIT",
+    "THROTTLE_TTL_MS",
+    "NEXT_PUBLIC_API_BASE_URL",
+    "NEXT_PUBLIC_ARC_CHAIN_ID",
+    "NEXT_PUBLIC_ARC_EXPLORER_URL",
+    "NEXT_PUBLIC_ARC_RPC_URL",
+    "NEXT_PUBLIC_GATEWAY_WALLET_ADDRESS",
+    "NEXT_PUBLIC_USDC_ADDRESS",
+    "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "typecheck": {
+      // Also `^build`: the API consumes `@rivora/core` as a built CommonJS
+      // artifact, so its type declarations have to exist before tsc runs.
+      "dependsOn": ["^typecheck", "^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  # The Solidity project. A pnpm package only so it can depend on
+  # `@rivora/core` for the differential fixtures and be driven by turbo — the
+  # contracts themselves are built by Foundry.
+  - "contracts"
