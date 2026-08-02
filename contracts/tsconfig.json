@@ -1,0 +1,5 @@
+{
+  "extends": "@rivora/typescript-config/library.json",
+  "include": ["script/**/*.ts", "scripts/**/*.mjs"],
+  "exclude": ["node_modules", "lib", "out", "cache"]
+}
