@@ -1,0 +1,19 @@
+{
+  "network": "arc-testnet",
+  "chainId": 5042002,
+  "rpcUrl": "https://rpc.testnet.arc.io",
+  "explorer": "https://testnet.arcscan.app",
+  "verifiedAt": "2026-08-02T11:43:29.711Z",
+  "deployedVia": "circle-smart-contract-platform",
+  "deployer": "0xc863804818a7131e46079de5b56e6c5d157603e7",
+  "admin": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
+  "underwriter": "0x2C6B240C79112D5FED7addC8a6179718FED042aF",
+  "contracts": {
+    "usdc": "0x3600000000000000000000000000000000000000",
+    "gatewayWallet": "0x0077777d7EBA4688BDeF3E311b846F25870A19B9",
+    "gatewayMinter": "0x0022222ABE238Cc2C7Bb1f21003F0a260052475B",
+    "RivoraCreditVault": "0xa0fd0db6b2418d2bc9e445f50fa620bb547e9407",
+    "RivoraCreditManager": "0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1",
+    "RivoraRiskRegistry": "0x151259fd145bf22289a625169d7c99036ad1b01b"
+  }
+}
