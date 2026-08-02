@@ -1,0 +1,24 @@
+{
+  "name": "@rivora/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "sideEffects": ["*.css"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./industry.css": "./src/industry.css",
+    "./rivora.css": "./src/rivora.css"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "ds:sync": "node scripts/sync-design-system.mjs"
+  },
+  "devDependencies": {
+    "@rivora/eslint-config": "workspace:*",
+    "@rivora/typescript-config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  }
+}

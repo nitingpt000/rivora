@@ -1,0 +1,157 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Rivora application layer.
+
+   The Industry design system (industry.css) owns the palette, type, spacing
+   and the base component classes. It does NOT define semantic status colours
+   or the small number of data-display primitives this product needs on almost
+   every screen. Those live here.
+
+   Rule: nothing in this file may hard-code a value the Industry tokens already
+   carry. Everything below is either a new semantic role or a composition of
+   existing tokens.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* — semantic status roles —
+     Borrower lifecycle and check outcomes need a green/amber/orange/red set
+     that the mono steel palette deliberately does not provide. These are the
+     only non-accent hues in the product and they carry meaning, never
+     decoration. Each is paired with a tinted ground for banner surfaces. */
+  --color-ok: #3d7a4f;
+  --color-ok-bg: oklch(0.95 0.03 150);
+  --color-warn: #a8730a;
+  --color-warn-bg: oklch(0.96 0.03 80);
+  --color-restrict: #b4530a;
+  --color-restrict-bg: oklch(0.95 0.035 55);
+  --color-danger: #a83232;
+  --color-danger-bg: oklch(0.95 0.03 25);
+  --color-danger-ink: #7a1f1f;
+  --color-warn-ink: #7a5407;
+  --color-restrict-ink: #8a3d06;
+
+  /* — scrim behind modals — */
+  --color-scrim: oklch(0.2 0.02 250 / 0.45);
+
+  /* — the monospace face used for addresses, hashes and machine output — */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* — layout rhythm —
+     Screens are laid out on one of three measures. Encoded so a screen never
+     invents its own width. */
+  --measure-wide: 1180px;
+  --measure-mid: 1080px;
+  --measure-narrow: 980px;
+  --measure-form: 900px;
+  --measure-tight: 760px;
+  --gutter: 24px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+a {
+  color: var(--color-accent-700);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-accent-900);
+  text-decoration: underline;
+}
+
+::selection {
+  background: var(--color-accent-200);
+}
+
+/* Every financial figure aligns on the decimal. Applied by the Money and
+   Figure primitives; also available as a utility for hand-built tables. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* — the uppercase tracked label used for every section head and stat kicker — */
+.kicker {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* — the pulse used by the testnet strip and the verification cursor — */
+@keyframes riv-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.riv-pulse {
+  animation: riv-pulse 1.6s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .riv-pulse {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* — responsive collapse —
+   Per screens.md §13.3: three columns at ≥1280, two at 960, one below 640.
+   Grids opt in with .riv-grid so a screen never writes its own media query. */
+.riv-grid {
+  display: grid;
+  gap: 14px;
+}
+.riv-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.riv-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.riv-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 960px) {
+  .riv-grid-3,
+  .riv-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .riv-grid-2,
+  .riv-grid-3,
+  .riv-grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Wide tables scroll inside their own container; the page never scrolls
+   sideways. screens.md §13.3. */
+.riv-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The table primitive keeps its columns readable rather than crushing them. */
+.riv-scroll-x > .table {
+  min-width: 720px;
+}
