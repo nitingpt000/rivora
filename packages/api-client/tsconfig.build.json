@@ -1,0 +1,37 @@
+{
+  /**
+   * CommonJS build, consumed by the NestJS API.
+   *
+   * The API imports only *types* from this package, but TypeScript still has
+   * to resolve them, and it cannot read an ESM source file from a CommonJS
+   * program without complaint. Emitting a CJS artifact with its own
+   * declarations removes the whole class of problem — the same arrangement
+   * `@rivora/core` uses.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "incremental": false,
+    "outDir": "dist",
+    "rootDir": "src",
+
+    /**
+     * `Node10` resolution cannot read an `exports` map, so point it straight
+     * at the sibling's built declarations. Types only — at runtime Node
+     * resolves `@rivora/core` through its `require` condition, which lands on
+     * the matching `dist/index.js`.
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@rivora/core": ["../core/dist/index.d.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

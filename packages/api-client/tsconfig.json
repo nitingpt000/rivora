@@ -1,0 +1,14 @@
+{
+  "extends": "@rivora/typescript-config/library.json",
+  "compilerOptions": {
+    /**
+     * The client runs in the browser and is imported by server code, so it
+     * needs both the fetch/Headers/Response globals and `process.env` for the
+     * configurable base URL.
+     */
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

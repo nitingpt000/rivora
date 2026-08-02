@@ -1,0 +1,80 @@
+/**
+ * @rivora/api-client — the wire contract and a typed client for it.
+ *
+ * The seam between the product and its backend. It knows the shape of protocol
+ * state and how to ask for it over HTTP; it knows nothing about React, zustand
+ * or any screen.
+ *
+ * Points at the NestJS API via `NEXT_PUBLIC_API_BASE_URL`. Every route sits
+ * under `/api/v1`, which the client adds — callers never spell a version.
+ */
+
+export { ApiError, createApiClient } from './client';
+export type { ApiClient, ClientOptions } from './client';
+export type {
+  ActivityEvent,
+  AgentPolicy,
+  AlertItem,
+  AllowlistEntry,
+  AmountRequest,
+  AnomalyDetail,
+  AnomalyEvidence,
+  AnomalyWallet,
+  ApiErrorBody,
+  AssessmentDetail,
+  AssessmentHistoryEntry,
+  AuthTokens,
+  BorrowerPosition,
+  BorrowerProfile,
+  BorrowerRiskDetail,
+  Constraint,
+  CustodyExposure,
+  CustodyStatus,
+  DefaultRecordEntry,
+  DefaultRegistry,
+  DrawRequest,
+  ExposureBucket,
+  ExposureReport,
+  FactorPenaltyEntry,
+  HealthMetrics,
+  LimitRecommendation,
+  LpPosition,
+  MutationResult,
+  NonceResponse,
+  NotificationEntry,
+  NotificationList,
+  ObservationRequirement,
+  ObservationStatus,
+  PolicyDecision,
+  PolicyUpdate,
+  ProtocolSnapshot,
+  ProtocolStats,
+  Receipt,
+  ReputationBand,
+  ReputationCard,
+  ReserveEvent,
+  ReserveStatus,
+  RevenueCustomer,
+  RevenueDetail,
+  RevenueExcluded,
+  RevenueMetrics,
+  RiskAlert,
+  RiskParameter,
+  RiskTimelineEntry,
+  Role,
+  SandboxProfile,
+  SandboxScore,
+  ScoreComponent,
+  SectorExposure,
+  SessionResponse,
+  SessionUser,
+  SnapshotMeta,
+  TierDistribution,
+  UpstreamDependency,
+  UpstreamExposure,
+  VaultEconomics,
+  VaultPerformance,
+  VaultPortfolio,
+  VaultState,
+  WatchlistEntry,
+} from './contracts';
