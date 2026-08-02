@@ -1,0 +1,93 @@
+# Rivora API and its database.
+#
+#   docker compose up --build
+#
+# Brings up Postgres, waits for it to be genuinely ready, applies migrations,
+# seeds the canonical dataset, and starts the API on :4000 with Swagger at
+# /docs.
+
+name: rivora
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rivora
+      POSTGRES_PASSWORD: rivora
+      POSTGRES_DB: rivora
+    ports:
+      # Published only so host tools (psql, Prisma Studio) can reach it. The
+      # API talks to Postgres over the compose network and does not use this.
+      # Defaults off 5432 because a native Postgres install commonly owns it;
+      # override with POSTGRES_PORT if 5433 is taken too.
+      - '${POSTGRES_PORT:-5433}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` alone reports true during the init container's own
+      # bootstrap, so dependents can connect and then be disconnected. Naming
+      # the database and user makes the check meaningful.
+      test: ['CMD-SHELL', 'pg_isready -U rivora -d rivora']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Runs to completion, then exits. Keeping migration out of the API's start
+  # command means N replicas do not race to migrate the same database.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      # The build stage, which still has the Prisma CLI and tsx. The runtime
+      # image prunes dev dependencies and cannot run either.
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://rivora:rivora@postgres:5432/rivora?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://rivora:rivora@postgres:5432/rivora?schema=public
+      PORT: 4000
+      CORS_ORIGINS: http://localhost:3000
+      SWAGGER_ENABLED: 'true'
+      NODE_ENV: production
+      # Local development value. The API refuses to start in production
+      # without one, which is why it is set here rather than defaulted in
+      # code — a shipped default secret is a forgeable session token for
+      # everyone who has ever read the repository.
+      #
+      # Override for any real deployment:
+      #   JWT_SECRET=$(openssl rand -base64 48) docker compose up
+      JWT_SECRET: ${JWT_SECRET:-local-development-only-not-for-any-real-deployment-01}
+      JWT_TTL_SECONDS: ${JWT_TTL_SECONDS:-3600}
+      # Domains accepted in the `domain` field of a SIWE message. This is what
+      # stops a signature harvested by another site being replayed here.
+      SIWE_DOMAINS: ${SIWE_DOMAINS:-localhost:3000}
+      ARC_CHAIN_ID: ${ARC_CHAIN_ID:-5042002}
+      # Deployed on Arc testnet — see contracts/deployments/arc-testnet.json.
+      # CHAIN_MODE stays `ledger` until a signer exists; setting it to `arc`
+      # makes money movement throw rather than silently write to the database.
+      CHAIN_MODE: ${CHAIN_MODE:-ledger}
+      CREDIT_VAULT_ADDRESS: ${CREDIT_VAULT_ADDRESS:-0xa0fd0db6b2418d2bc9e445f50fa620bb547e9407}
+      CREDIT_MANAGER_ADDRESS: ${CREDIT_MANAGER_ADDRESS:-0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1}
+      RISK_REGISTRY_ADDRESS: ${RISK_REGISTRY_ADDRESS:-0x151259fd145bf22289a625169d7c99036ad1b01b}
+    ports:
+      - '${API_PORT:-4000}:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
