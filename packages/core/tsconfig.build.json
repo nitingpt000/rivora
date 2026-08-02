@@ -1,0 +1,26 @@
+{
+  /**
+   * CommonJS build, consumed only by the NestJS API.
+   *
+   * The package ships TypeScript source for bundlers — that is what keeps the
+   * web app's edit-and-see loop free of a rebuild step. A Node server cannot
+   * read that, so this emits a CJS artifact alongside it, reached through the
+   * `require` condition in `exports`. Nothing that resolves the `default`
+   * condition is affected.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "incremental": false,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}
