@@ -1,0 +1,35 @@
+{
+  "name": "@rivora/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Rivora protocol contracts for Arc. Foundry.",
+  "scripts": {
+    "fixtures": "tsx script/generate-fixtures.ts",
+    "setup:lib": "node scripts/link-openzeppelin.mjs",
+    "build": "pnpm setup:lib && pnpm fixtures && node scripts/forge.mjs build",
+    "test": "pnpm setup:lib && pnpm fixtures && node scripts/forge.mjs test",
+    "test:gas": "node scripts/forge.mjs test --gas-report",
+    "coverage": "node scripts/forge.mjs coverage --no-match-coverage \"(test|script)\"",
+    "deploy:arc": "node scripts/forge.mjs script script/Deploy.s.sol --rpc-url arc_testnet --broadcast",
+    "circle:setup": "node scripts/circle/setup.mjs",
+    "circle:deploy": "node scripts/circle/deploy.mjs",
+    "circle:status": "node scripts/circle/status.mjs",
+    "fmt": "node scripts/forge.mjs fmt",
+    "lint": "node scripts/forge.mjs fmt --check",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf out cache"
+  },
+  "devDependencies": {
+    "@circle-fin/developer-controlled-wallets": "^10.8.0",
+    "@circle-fin/smart-contract-platform": "^10.8.0",
+    "@rivora/core": "workspace:*",
+    "@rivora/typescript-config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "viem": "^2.55.10"
+  }
+}
