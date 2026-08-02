@@ -1,0 +1,4565 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/nonce": {
+      "post": {
+        "description": "Returns a single-use nonce to embed in an EIP-4361 message. Nonces expire after five minutes and are consumed on first successful verification, so a captured message cannot be replayed.",
+        "operationId": "AuthController_nonce",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NonceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NonceResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "10 requests per minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request a sign-in challenge",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "description": "Verifies an EIP-4361 signature and issues a JWT. The message must carry a nonce from `/auth/nonce`, name a domain this API accepts, and target the configured chain.\n\nA wallet that has registered nothing still receives a valid token, with a null role — that is a new user, not a failure.",
+        "operationId": "AuthController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokenResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature did not verify (`invalid_signature`), or the nonce was unknown, reused or expired (`invalid_nonce`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Exchange a signed message for a session token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "description": "Resolves the role fresh rather than trusting the token, so a grant or revocation takes effect without re-signing.",
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read the current session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "Provided for symmetry and for clients that want an explicit end. Tokens are stateless and self-expiring, so the client must discard its copy — this call cannot invalidate one that has already been handed out. Short token lifetimes are what bound the exposure.",
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "End the session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/snapshot": {
+      "get": {
+        "description": "One consistent read of the borrower position, revenue, health, vault, LP position and the event and alert streams. The surfaces share a moment in time rather than each fetching their own slice, so two screens can never disagree about utilization.\n\n**Requires authentication.** This carries individual positions — a named borrower’s outstanding balance and the LP’s wallet balance. For aggregate protocol health with no position data, use the public `/protocol/stats`.",
+        "operationId": "SnapshotController_getSnapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolSnapshotDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read all protocol state",
+        "tags": [
+          "protocol"
+        ]
+      }
+    },
+    "/protocol/stats": {
+      "get": {
+        "description": "What the landing page shows a stranger: TVL, utilization, borrower counts, routed revenue and the loss record. Contains no individual position — for that, authenticate and call `/snapshot`.",
+        "operationId": "PublicController_stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolStatsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Aggregate protocol state",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/activity": {
+      "get": {
+        "description": "Newest first. Payer addresses, per-customer revenue, endpoint URLs and borrower legal identity never appear here.",
+        "operationId": "PublicController_activity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActivityEventDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "The public event stream",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/reputation/{handle}": {
+      "get": {
+        "description": "Bands rather than figures. Revenue totals, payer identities, per-customer splits and the endpoint URL are withheld — a counterparty should be able to judge reliability without receiving a competitor’s order book.",
+        "operationId": "PublicController_reputation",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0x9c4e…a7f1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReputationCardDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A borrower's public credit record",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/defaults": {
+      "get": {
+        "description": "Public by design: the registry’s value to a third party depends on it being non-negotiable. A default may be cured, but no interface path deletes a record.",
+        "operationId": "PublicController_defaults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultRegistryDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The permanent default registry",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/revenue": {
+      "get": {
+        "description": "The underwriting inputs derived from settled payments: eligible and gross totals, growth, concentration and payer mix.",
+        "operationId": "BorrowerController_revenue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Trailing 30-day revenue",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/revenue/customers": {
+      "get": {
+        "description": "Pseudonymous labels and shares. Payer addresses are never returned — the concentration factor needs the distribution, not identities.",
+        "operationId": "BorrowerController_customers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RevenueCustomerDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revenue by customer",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/revenue/excluded": {
+      "get": {
+        "description": "With the reason for each exclusion, so a borrower can act on it rather than guess.",
+        "operationId": "BorrowerController_excluded",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludedRevenueDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revenue excluded from the eligible figure",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/credit/assessment": {
+      "get": {
+        "description": "Every candidate limit with the binding rung flagged, plus the per-factor haircut. Recomputed from live inputs — PRD §14.5: a borrower told only the final number will optimise the wrong metric.",
+        "operationId": "BorrowerController_assessment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The constraint ladder behind the current limit",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/credit/history": {
+      "get": {
+        "operationId": "BorrowerController_history",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "example": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssessmentHistoryEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Past assessments, newest first",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/custody": {
+      "get": {
+        "description": "The screen that makes the credit legible as safe: binding state, coverage ratio and the waterfall split.",
+        "operationId": "BorrowerController_custody",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustodyStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Router binding and revenue routing",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/custody/restore-binding": {
+      "post": {
+        "description": "Restores the limit held when the restriction landed. Refused with `binding_ok` if the binding was never broken.",
+        "operationId": "BorrowerController_restoreBinding",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustodyStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Re-verify a repaired router binding",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/policy": {
+      "get": {
+        "operationId": "BorrowerController_policy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPolicyDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The agent wallet policy draws are spent within",
+        "tags": [
+          "borrower"
+        ]
+      },
+      "patch": {
+        "description": "Tightening applies immediately; widening takes effect after the configured delay, so a compromised agent cannot raise its own ceiling and drain the line in the same minute. Check `pendingChangeAt` in the response.",
+        "operationId": "BorrowerController_updatePolicy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPolicyDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the agent policy",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/reserve": {
+      "get": {
+        "operationId": "BorrowerController_reserve",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReserveStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Loss-reserve balance and contribution rate",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "BorrowerController_notifications",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "example": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Alerts for this borrower, newest first",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/notifications/read": {
+      "post": {
+        "description": "Omit `ids` to mark everything read. Scoped to the caller’s own alerts.",
+        "operationId": "BorrowerController_markRead",
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "updated": {
+                      "type": "number",
+                      "example": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark alerts read",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/services/verify-endpoint": {
+      "post": {
+        "description": "Resolves the host, reads the 402 challenge and compares the advertised `payTo` against the deployed router. Returns the staged log so a borrower can see which check failed, not merely that verification did.",
+        "operationId": "BorrowerController_verifyEndpoint",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEndpointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointVerificationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Probe an endpoint",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/services": {
+      "post": {
+        "description": "Creates the borrower record, links it to the signed-in wallet and opens the 30-day observation window. No role is required — this is how a wallet becomes a borrower.",
+        "operationId": "ServiceRegistrationController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterServiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRegistrationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This wallet already has a registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register a service",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/credit/draw": {
+      "post": {
+        "description": "Capacity, borrower status and vault liquidity are all checked server-side rather than in the caller. A draw above the available limit is refused with `exceeds_available`.",
+        "operationId": "CreditController_draw",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A unique string per operation. A retry with the same key replays the first response instead of moving money twice. Reusing a key with a different body is rejected with `idempotency_key_reused`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DrawRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `borrower` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request was well formed but the protocol declined it — insufficient credit, blocked status, or no outstanding debt. `code` carries the reason.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Draw against the approved limit",
+        "tags": [
+          "credit"
+        ]
+      }
+    },
+    "/credit/repay": {
+      "post": {
+        "description": "Applied interest first, then principal. An amount above the outstanding debt is capped rather than refused — overpaying is a reasonable ask, and the excess simply is not taken.",
+        "operationId": "CreditController_repay",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A unique string per operation. A retry with the same key replays the first response instead of moving money twice. Reusing a key with a different body is rejected with `idempotency_key_reused`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `borrower` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request was well formed but the protocol declined it — insufficient credit, blocked status, or no outstanding debt. `code` carries the reason.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Repay manually",
+        "tags": [
+          "credit"
+        ]
+      }
+    },
+    "/vault/portfolio": {
+      "get": {
+        "description": "Shares held, current value, amount earned, and anything sitting in the exit queue.",
+        "operationId": "VaultController_portfolio",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPortfolioDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The caller’s vault position",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/vault/performance": {
+      "get": {
+        "description": "Separates organic yield from the protocol subsidy on purpose. A displayed APY that silently blends the two overstates what the vault earns, and the subsidy has an end date.",
+        "operationId": "VaultController_performance",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultPerformanceDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Yield decomposition",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/vault/deposit": {
+      "post": {
+        "description": "Shares are minted at the current share price. Lowers utilization for everyone.",
+        "operationId": "VaultController_deposit",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supply USDC and mint vault shares",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/vault/withdraw": {
+      "post": {
+        "description": "Serves what liquidity above the buffer floor allows and queues the rest, so a successful response can report less than was requested. Check `receipt.queued`.",
+        "operationId": "VaultController_withdraw",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Redeem shares",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/vault/queue/claim": {
+      "post": {
+        "operationId": "VaultController_claim",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOnlyResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Claim the funded portion of a queued exit",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/vault/queue/cancel": {
+      "post": {
+        "description": "Shares and interest accrual resume from the moment of cancellation.",
+        "operationId": "VaultController_cancel",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOnlyResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `lp` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel a queued exit",
+        "tags": [
+          "vault"
+        ]
+      }
+    },
+    "/risk/watchlist": {
+      "get": {
+        "description": "Anything not cleanly ACTIVE, plus anything whose routed coverage has drifted below 0.90 — coverage falling is the earliest signal that revenue is finding a way around the router.",
+        "operationId": "RiskController_watchlist",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WatchlistEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Borrowers needing attention",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/exposure": {
+      "get": {
+        "description": "Outstanding principal by tier, the largest single exposure, and any breach of the per-borrower cap.",
+        "operationId": "RiskController_exposure",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExposureReportDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Concentration of the book",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/params": {
+      "get": {
+        "description": "Read-only, and deliberately so. Changing a protocol parameter is a governance action with a timelock, not an HTTP call — a mutation here would be the most dangerous endpoint in the API. Values are read from `@rivora/core`, so what an operator sees is what the underwriter applies.",
+        "operationId": "RiskController_parameters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RiskParameterDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Live risk parameters",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/defaults/declare": {
+      "post": {
+        "description": "Writes a permanent public record against a named borrower, sets the credit line to DEFAULTED and realises the loss against the vault.\n\nFully audited: actor, request id, evidence hash and trigger are recorded and cannot be edited or deleted.\n\n**Not yet implemented:** PRD §33 requires a 2-of-3 operator quorum for this action. Today a single `ops` session is sufficient.",
+        "operationId": "RiskController_declareDefault",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclareDefaultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultDeclarationResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Declared principal exceeds the outstanding balance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Declare a default",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/audit": {
+      "get": {
+        "description": "Append-only record of privileged actions, newest first. There is no delete path.",
+        "operationId": "RiskController_auditTrail",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "example": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "default": 0,
+              "example": 0,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The audit trail",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/partner/score/{handle}": {
+      "get": {
+        "description": "Requires an API key with the `score:read` scope, sent as `x-api-key`.\n\nDeliberately narrower than the borrower’s own view: score, tier and counts only. Revenue figures, payer data and the endpoint URL are never returned.\n\nRate limited to 60 requests per minute per caller.",
+        "operationId": "PartnerController_score",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0x9c4e…a7f1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerScoreDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Key is missing, unknown, revoked, or lacks the `score:read` scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Look up a borrower’s credit standing",
+        "tags": [
+          "partner"
+        ]
+      }
+    },
+    "/settlement/tick": {
+      "post": {
+        "description": "Accrues interest, routes the repayment share of settled revenue, tops up the reserve and funds the withdrawal queue.\n\nA keeper endpoint, restricted to `ops` and deliberately absent from every UI — nothing a user does should move the protocol clock. Audited on each call.",
+        "operationId": "SettlementController_tick",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Strongly recommended here. A scheduler that retries on timeout would otherwise advance the book twice and accrue a day of interest that never happened.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOnlyResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Advance the book by one settlement day",
+        "tags": [
+          "settlement"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Pings the database rather than only reporting that the process is up — the container orchestrator needs to know the API can actually serve, not just that it answered.",
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All checks passing.\n\nThe Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "At least one check failed.\n\nThe Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness and database readiness",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Rivora Protocol API",
+    "description": "Credit underwritten from verifiable machine revenue.\n\nThe backend behind the four Rivora surfaces — borrower, liquidity provider, risk operator and partner.\n\n## Authentication\n\nSign-In With Ethereum (EIP-4361), in three calls:\n\n1. `POST /auth/nonce` with your address → a single-use challenge.\n2. Sign an EIP-4361 message containing that nonce with your wallet.\n3. `POST /auth/verify` with the message and signature → a JWT.\n\nSend the token as `Authorization: Bearer <token>`. Signatures are checked against the address in the message, the domain is pinned to origins this API serves, and the nonce is consumed on first use — so a signature captured elsewhere cannot be replayed here.\n\nPartner services authenticate instead with an API key in `x-api-key`. Only the hash of a key is stored.\n\n## Authorization\n\nEvery route requires a session unless marked otherwise. Roles are enforced server-side:\n\n| Role | May reach |\n| --- | --- |\n| `borrower` | Its own revenue, credit, custody, policy, reserve and alerts |\n| `lp` | Vault portfolio, performance and money movement |\n| `ops` | Cross-borrower risk views, default declaration, settlement |\n| `partner` | The Score API, by API key |\n\nBorrower routes resolve the record from the *session*, never from a path parameter — there is no `/borrowers/:id`, because an endpoint that takes an id is one somebody will eventually call with someone else’s.\n\n## Conventions\n\n**Money.** Every amount is USDC to six decimal places, carried as a JSON number. Values are stored as exact decimals and rounded once, at this boundary.\n\n**Refusals.** A well-formed request the protocol declines returns `422` with a `code` for branching and a message written to be shown to a person. A malformed one returns `400`. Every error body is `{ error, code, statusCode, requestId }`.\n\n**Mutations return the whole snapshot,** not a patch, so a client either holds the server’s state or knows the call failed.\n\n**Retries.** Money mutations accept an `Idempotency-Key` header. A retry with the same key replays the first response instead of moving money twice.\n\n**Rate limits.** 120 requests per minute per IP by default; auth endpoints allow 10, the partner Score API 60. Exceeding a limit returns `429`.\n\n**Tracing.** Every response carries `x-request-id`. Quote it when reporting a problem — it appears in the error body and in the server log.",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Sign-In With Ethereum and session management"
+    },
+    {
+      "name": "public",
+      "description": "Readable without a wallet"
+    },
+    {
+      "name": "protocol",
+      "description": "Full protocol state"
+    },
+    {
+      "name": "borrower",
+      "description": "A borrower’s own record"
+    },
+    {
+      "name": "credit",
+      "description": "Borrower money movement"
+    },
+    {
+      "name": "vault",
+      "description": "Liquidity-provider money movement"
+    },
+    {
+      "name": "risk",
+      "description": "Risk-operator console"
+    },
+    {
+      "name": "partner",
+      "description": "Score API, authenticated by API key"
+    },
+    {
+      "name": "settlement",
+      "description": "Keeper operations"
+    },
+    {
+      "name": "health",
+      "description": "Liveness and readiness"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "description": "A token from `POST /auth/verify`."
+      },
+      "api-key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Partner API key. Requires the `score:read` scope."
+      }
+    },
+    "schemas": {
+      "NonceRequestDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x5d92a10f4c3b8e7d6a2f9c04e1b83750d6ab3ba6",
+            "description": "The wallet that will sign. Checksummed or lowercase, both accepted."
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "NonceResponseDto": {
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "example": "k7Qm2Xp9Rt4Nw8Lz",
+            "description": "Single-use. Embed in the SIWE message."
+          },
+          "issuedAt": {
+            "type": "string",
+            "example": "2026-08-02T14:31:07.000Z",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-08-02T14:36:07.000Z",
+            "format": "date-time",
+            "description": "Nonces expire quickly to bound the window for a stolen challenge."
+          }
+        },
+        "required": [
+          "nonce",
+          "issuedAt",
+          "expiresAt"
+        ]
+      },
+      "ApiErrorDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Requested 99999.00 exceeds available credit of 530.00."
+          },
+          "code": {
+            "type": "string",
+            "example": "exceeds_available",
+            "description": "Machine-readable reason, for branching in the client."
+          },
+          "statusCode": {
+            "type": "number",
+            "example": 422
+          }
+        },
+        "required": [
+          "error",
+          "code",
+          "statusCode"
+        ]
+      },
+      "VerifyRequestDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The exact EIP-4361 message that was signed. Any edit invalidates the signature.",
+            "example": "localhost:3000 wants you to sign in with your Ethereum account:\n0x5d92…\n\nSign in to Rivora.\n\nURI: http://localhost:3000\nVersion: 1\nChain ID: 5918836\nNonce: k7Qm2Xp9Rt4Nw8Lz\nIssued At: 2026-08-02T14:31:07.000Z"
+          },
+          "signature": {
+            "type": "string",
+            "example": "0x1b2c…",
+            "description": "65-byte secp256k1 signature, hex encoded."
+          }
+        },
+        "required": [
+          "message",
+          "signature"
+        ]
+      },
+      "SessionUserDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x5d92a10f4c3b8e7d6a2f9c04e1b83750d6ab3ba6"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "borrower",
+              "lp",
+              "ops",
+              "partner"
+            ],
+            "nullable": true,
+            "description": "Null for a wallet that has registered nothing yet."
+          },
+          "home": {
+            "type": "object",
+            "example": "/dashboard",
+            "nullable": true
+          },
+          "known": {
+            "type": "boolean",
+            "example": true
+          },
+          "borrowerId": {
+            "type": "string",
+            "example": "clx8f2k9a0000",
+            "description": "Set when the session is scoped to one borrower record."
+          }
+        },
+        "required": [
+          "address",
+          "role",
+          "home",
+          "known"
+        ]
+      },
+      "AuthTokenResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT. Send as `Authorization: Bearer <token>`."
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 3600,
+            "description": "Lifetime in seconds."
+          },
+          "tokenType": {
+            "type": "string",
+            "example": "Bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SessionUserDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresIn",
+          "tokenType",
+          "user"
+        ]
+      },
+      "BorrowerPositionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0x9c4e…a7f1",
+            "description": "Public protocol handle."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION",
+              "ELIGIBLE",
+              "ACTIVE",
+              "WATCH",
+              "RESTRICTED",
+              "DELINQUENT",
+              "DEFAULTED",
+              "REPAID"
+            ],
+            "example": "ACTIVE"
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "Prime",
+              "Strong",
+              "Standard",
+              "Restricted",
+              "Ineligible"
+            ],
+            "example": "Strong"
+          },
+          "score": {
+            "type": "number",
+            "example": 78,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "previousScore": {
+            "type": "number",
+            "example": 68,
+            "description": "Score at the previous assessment."
+          },
+          "limit": {
+            "type": "number",
+            "example": 2530,
+            "description": "Approved credit limit, USDC."
+          },
+          "previousLimit": {
+            "type": "number",
+            "example": 1690,
+            "description": "Limit approved at the previous assessment."
+          },
+          "principal": {
+            "type": "number",
+            "example": 2000,
+            "description": "Outstanding principal, USDC."
+          },
+          "accruedInterest": {
+            "type": "number",
+            "example": 8.42
+          },
+          "pendingDraws": {
+            "type": "number",
+            "example": 0
+          },
+          "reserve": {
+            "type": "number",
+            "example": 248.6
+          },
+          "reserveTarget": {
+            "type": "number",
+            "example": 253
+          },
+          "repaymentBps": {
+            "type": "number",
+            "example": 2000,
+            "description": "Basis points of settled revenue routed to repayment."
+          },
+          "reserveBps": {
+            "type": "number",
+            "example": 200,
+            "description": "Basis points routed to the loss reserve."
+          },
+          "completedCycles": {
+            "type": "number",
+            "example": 1
+          },
+          "historyDays": {
+            "type": "number",
+            "example": 60
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "example": "A"
+          },
+          "watchReason": {
+            "type": "string",
+            "enum": [
+              "revenue",
+              "concentration",
+              ""
+            ],
+            "example": "",
+            "description": "Empty when the borrower is not on watch."
+          },
+          "restrictReason": {
+            "type": "string",
+            "enum": [
+              "circular",
+              "binding",
+              ""
+            ],
+            "example": ""
+          },
+          "anomalyDetected": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "tier",
+          "score",
+          "previousScore",
+          "limit",
+          "previousLimit",
+          "principal",
+          "accruedInterest",
+          "pendingDraws",
+          "reserve",
+          "reserveTarget",
+          "repaymentBps",
+          "reserveBps",
+          "completedCycles",
+          "historyDays",
+          "custody",
+          "watchReason",
+          "restrictReason",
+          "anomalyDetected"
+        ]
+      },
+      "RevenueMetricsDto": {
+        "type": "object",
+        "properties": {
+          "eligible": {
+            "type": "number",
+            "example": 13500,
+            "description": "Eligible trailing 30-day revenue, USDC."
+          },
+          "gross": {
+            "type": "number",
+            "example": 14040
+          },
+          "excluded": {
+            "type": "number",
+            "example": 540,
+            "description": "Revenue excluded by the anomaly filters."
+          },
+          "dailyMean": {
+            "type": "number",
+            "example": 450,
+            "description": "Mean settled revenue per day."
+          },
+          "growthPct": {
+            "type": "number",
+            "example": 35
+          },
+          "largestPayerPct": {
+            "type": "number",
+            "example": 14,
+            "description": "Share of revenue from the single largest payer."
+          },
+          "hhi": {
+            "type": "number",
+            "example": 0.14,
+            "description": "Herfindahl-Hirschman index of payer concentration."
+          },
+          "uniquePayers": {
+            "type": "number",
+            "example": 386
+          },
+          "repeatPayers": {
+            "type": "number",
+            "example": 168
+          }
+        },
+        "required": [
+          "eligible",
+          "gross",
+          "excluded",
+          "dailyMean",
+          "growthPct",
+          "largestPayerPct",
+          "hhi",
+          "uniquePayers",
+          "repeatPayers"
+        ]
+      },
+      "QualityFactorsDto": {
+        "type": "object",
+        "properties": {
+          "S": {
+            "type": "number",
+            "example": 0.95,
+            "description": "Service reliability."
+          },
+          "C": {
+            "type": "number",
+            "example": 0.86,
+            "description": "Customer concentration, 1 − HHI."
+          },
+          "V": {
+            "type": "number",
+            "example": 0.9,
+            "description": "Revenue volatility."
+          },
+          "D": {
+            "type": "number",
+            "example": 0.95,
+            "description": "Revenue diversity."
+          },
+          "M": {
+            "type": "number",
+            "example": 0.88,
+            "description": "Operating capacity."
+          },
+          "G": {
+            "type": "number",
+            "example": 1.1,
+            "description": "Revenue growth. May exceed 1."
+          }
+        },
+        "required": [
+          "S",
+          "C",
+          "V",
+          "D",
+          "M",
+          "G"
+        ]
+      },
+      "HealthMetricsDto": {
+        "type": "object",
+        "properties": {
+          "coverageRatio": {
+            "type": "number",
+            "example": 0.98,
+            "description": "Routed revenue over expected revenue."
+          },
+          "uptimePct": {
+            "type": "number",
+            "example": 99.4
+          },
+          "successPct": {
+            "type": "number",
+            "example": 96.2
+          },
+          "refundRatePct": {
+            "type": "number",
+            "example": 0.9
+          },
+          "latencyMs": {
+            "type": "number",
+            "example": 184
+          },
+          "bindingOk": {
+            "type": "boolean",
+            "example": true,
+            "description": "Advertised payTo still matches the deployed router."
+          },
+          "endpointUp": {
+            "type": "boolean",
+            "example": true
+          },
+          "factors": {
+            "$ref": "#/components/schemas/QualityFactorsDto"
+          }
+        },
+        "required": [
+          "coverageRatio",
+          "uptimePct",
+          "successPct",
+          "refundRatePct",
+          "latencyMs",
+          "bindingOk",
+          "endpointUp",
+          "factors"
+        ]
+      },
+      "VaultStateDto": {
+        "type": "object",
+        "properties": {
+          "totalAssets": {
+            "type": "number",
+            "example": 25000
+          },
+          "availableLiquidity": {
+            "type": "number",
+            "example": 16530
+          },
+          "protocolReserve": {
+            "type": "number",
+            "example": 412.6
+          },
+          "firstLossTranche": {
+            "type": "number",
+            "example": 2500,
+            "description": "Absorbs defaults ahead of liquidity providers."
+          },
+          "queueTotal": {
+            "type": "number",
+            "example": 0,
+            "description": "Total sitting in the FIFO exit queue."
+          },
+          "realizedLosses": {
+            "type": "number",
+            "example": 0
+          },
+          "activeBorrowers": {
+            "type": "number",
+            "example": 7
+          },
+          "onWatch": {
+            "type": "number",
+            "example": 1
+          },
+          "routedRevenue30d": {
+            "type": "number",
+            "example": 41280
+          },
+          "principalRepaid": {
+            "type": "number",
+            "example": 6190
+          },
+          "interestGenerated": {
+            "type": "number",
+            "example": 184.2
+          },
+          "sharePrice": {
+            "type": "number",
+            "example": 1.007597,
+            "description": "Value of one vault share, USDC."
+          }
+        },
+        "required": [
+          "totalAssets",
+          "availableLiquidity",
+          "protocolReserve",
+          "firstLossTranche",
+          "queueTotal",
+          "realizedLosses",
+          "activeBorrowers",
+          "onWatch",
+          "routedRevenue30d",
+          "principalRepaid",
+          "interestGenerated",
+          "sharePrice"
+        ]
+      },
+      "LpPositionDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x8e11…4c73"
+          },
+          "walletBalance": {
+            "type": "number",
+            "example": 12400
+          },
+          "supplied": {
+            "type": "number",
+            "example": 5000
+          },
+          "shares": {
+            "type": "number",
+            "example": 4962.31
+          },
+          "queued": {
+            "type": "number",
+            "example": 0
+          },
+          "queueFunded": {
+            "type": "number",
+            "example": 0,
+            "description": "Part of the queued amount already funded."
+          }
+        },
+        "required": [
+          "address",
+          "walletBalance",
+          "supplied",
+          "shares",
+          "queued",
+          "queueFunded"
+        ]
+      },
+      "ActivityEventDto": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "example": "14:31:02",
+            "description": "UTC time of day."
+          },
+          "type": {
+            "type": "string",
+            "example": "credit.repayment.completed"
+          },
+          "who": {
+            "type": "string",
+            "example": "0x9c4e…a7f1",
+            "description": "Actor handle. Never a payer address."
+          },
+          "amount": {
+            "type": "string",
+            "example": "90.00 USDC",
+            "description": "Pre-formatted, including the unit."
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x4a71…9f30"
+          },
+          "note": {
+            "type": "string",
+            "example": "interest 0.24 · principal 89.76"
+          }
+        },
+        "required": [
+          "time",
+          "type",
+          "who",
+          "amount",
+          "tx"
+        ]
+      },
+      "AlertDto": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "example": "12:47"
+          },
+          "icon": {
+            "type": "string",
+            "example": "✓"
+          },
+          "title": {
+            "type": "string",
+            "example": "Draw completed"
+          },
+          "body": {
+            "type": "string",
+            "example": "400.00 USDC to 0x2b18…9e04"
+          },
+          "unread": {
+            "type": "boolean",
+            "example": true
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x4a71…9f30"
+          },
+          "href": {
+            "type": "string",
+            "example": "/custody"
+          },
+          "cta": {
+            "type": "string",
+            "example": "Re-verify"
+          }
+        },
+        "required": [
+          "time",
+          "icon",
+          "title",
+          "unread"
+        ]
+      },
+      "SnapshotMetaDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "number",
+            "example": 60,
+            "description": "Settlement days processed."
+          },
+          "network": {
+            "type": "string",
+            "example": "Arc Testnet"
+          },
+          "asOf": {
+            "type": "string",
+            "example": "2026-08-02T14:31:07.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "day",
+          "network",
+          "asOf"
+        ]
+      },
+      "ProtocolSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "borrower": {
+            "$ref": "#/components/schemas/BorrowerPositionDto"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/RevenueMetricsDto"
+          },
+          "health": {
+            "$ref": "#/components/schemas/HealthMetricsDto"
+          },
+          "vault": {
+            "$ref": "#/components/schemas/VaultStateDto"
+          },
+          "lp": {
+            "$ref": "#/components/schemas/LpPositionDto"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEventDto"
+            }
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SnapshotMetaDto"
+          }
+        },
+        "required": [
+          "borrower",
+          "revenue",
+          "health",
+          "vault",
+          "lp",
+          "events",
+          "alerts",
+          "meta"
+        ]
+      },
+      "ProtocolStatsDto": {
+        "type": "object",
+        "properties": {
+          "totalValueLocked": {
+            "type": "number",
+            "example": 25000,
+            "description": "Total value locked, USDC."
+          },
+          "outstandingCredit": {
+            "type": "number",
+            "example": 8470,
+            "description": "Outstanding principal across every borrower."
+          },
+          "utilization": {
+            "type": "number",
+            "example": 0.3388,
+            "description": "0–1."
+          },
+          "activeBorrowers": {
+            "type": "number",
+            "example": 7
+          },
+          "onWatch": {
+            "type": "number",
+            "example": 1
+          },
+          "routedRevenue30d": {
+            "type": "number",
+            "example": 41280
+          },
+          "principalRepaid": {
+            "type": "number",
+            "example": 6190
+          },
+          "realizedLosses": {
+            "type": "number",
+            "example": 0
+          },
+          "defaultRatePct": {
+            "type": "number",
+            "example": 0,
+            "description": "Defaulted principal over originated principal, percent."
+          },
+          "repaidFromRevenuePct": {
+            "type": "number",
+            "example": 100,
+            "description": "Share of repayment that came from routed revenue."
+          },
+          "day": {
+            "type": "number",
+            "example": 60,
+            "description": "Settlement days processed."
+          },
+          "network": {
+            "type": "string",
+            "example": "Arc Testnet"
+          },
+          "asOf": {
+            "type": "string",
+            "example": "2026-08-02T14:31:07.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "totalValueLocked",
+          "outstandingCredit",
+          "utilization",
+          "activeBorrowers",
+          "onWatch",
+          "routedRevenue30d",
+          "principalRepaid",
+          "realizedLosses",
+          "defaultRatePct",
+          "repaidFromRevenuePct",
+          "day",
+          "network",
+          "asOf"
+        ]
+      },
+      "ReputationBandDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "Service reliability"
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MODERATE",
+              "LOW",
+              "STRUCTURAL"
+            ],
+            "example": "HIGH"
+          }
+        },
+        "required": [
+          "label",
+          "band"
+        ]
+      },
+      "ReputationCardDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "endpointHash": {
+            "type": "object",
+            "example": "0x3b7d…e922",
+            "description": "Hash of the endpoint binding, not the URL."
+          },
+          "score": {
+            "type": "number",
+            "example": 78
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "Prime",
+              "Strong",
+              "Standard",
+              "Restricted",
+              "Ineligible"
+            ]
+          },
+          "monthsObserved": {
+            "type": "number",
+            "example": 2,
+            "description": "Whole months of observed history."
+          },
+          "repaymentCycles": {
+            "type": "number",
+            "example": 1
+          },
+          "onTimeRatioPct": {
+            "type": "number",
+            "example": 100
+          },
+          "principalRepaid": {
+            "type": "number",
+            "example": 6190,
+            "description": "Cumulative principal repaid, USDC."
+          },
+          "defaultsRecorded": {
+            "type": "number",
+            "example": 0
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "example": "A"
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReputationBandDto"
+            }
+          },
+          "attestedAt": {
+            "type": "string",
+            "example": "2026-08-02T14:00:00.000Z",
+            "format": "date-time"
+          },
+          "model": {
+            "type": "string",
+            "example": "riv-uw-2.1"
+          }
+        },
+        "required": [
+          "handle",
+          "endpointHash",
+          "score",
+          "tier",
+          "monthsObserved",
+          "repaymentCycles",
+          "onTimeRatioPct",
+          "principalRepaid",
+          "defaultsRecorded",
+          "custody",
+          "bands",
+          "attestedAt",
+          "model"
+        ]
+      },
+      "DefaultRecordDto": {
+        "type": "object",
+        "properties": {
+          "borrower": {
+            "type": "string",
+            "example": "0x4c30…f18b"
+          },
+          "declaredAt": {
+            "type": "string",
+            "example": "2026-07-14T00:00:00.000Z",
+            "format": "date-time"
+          },
+          "curedAt": {
+            "type": "string",
+            "example": "2026-07-29T00:00:00.000Z",
+            "format": "date-time"
+          },
+          "principal": {
+            "type": "number",
+            "example": 1850
+          },
+          "recovered": {
+            "type": "number",
+            "example": 1850
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CURED",
+              "UNCURED"
+            ],
+            "example": "CURED"
+          },
+          "trigger": {
+            "type": "string",
+            "example": "coverage ratio 0.31"
+          },
+          "evidenceHash": {
+            "type": "string",
+            "example": "0x6d20…be15"
+          },
+          "automatic": {
+            "type": "boolean",
+            "example": true,
+            "description": "Declared by the protocol rather than by an operator."
+          },
+          "daysToCure": {
+            "type": "object",
+            "example": 15,
+            "nullable": true,
+            "description": "Days from declaration to cure."
+          }
+        },
+        "required": [
+          "borrower",
+          "declaredAt",
+          "principal",
+          "recovered",
+          "status",
+          "trigger",
+          "evidenceHash",
+          "automatic",
+          "daysToCure"
+        ]
+      },
+      "DefaultRegistryDto": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DefaultRecordDto"
+            }
+          },
+          "count": {
+            "type": "number",
+            "example": 2
+          },
+          "totalPrincipal": {
+            "type": "number",
+            "example": 6050
+          },
+          "totalRecovered": {
+            "type": "number",
+            "example": 2810
+          },
+          "recoveryRatePct": {
+            "type": "number",
+            "example": 46.4
+          },
+          "cureRatePct": {
+            "type": "number",
+            "example": 50
+          }
+        },
+        "required": [
+          "records",
+          "count",
+          "totalPrincipal",
+          "totalRecovered",
+          "recoveryRatePct",
+          "cureRatePct"
+        ]
+      },
+      "RevenueDetailDto": {
+        "type": "object",
+        "properties": {
+          "eligible": {
+            "type": "number",
+            "example": 13500
+          },
+          "gross": {
+            "type": "number",
+            "example": 14040
+          },
+          "excluded": {
+            "type": "number",
+            "example": 540
+          },
+          "dailyMean": {
+            "type": "number",
+            "example": 450
+          },
+          "growthPct": {
+            "type": "number",
+            "example": 35
+          },
+          "largestPayerPct": {
+            "type": "number",
+            "example": 14
+          },
+          "hhi": {
+            "type": "number",
+            "example": 0.14
+          },
+          "concentrationBand": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MODERATE",
+              "ELEVATED",
+              "HIGH"
+            ],
+            "example": "MODERATE"
+          },
+          "uniquePayers": {
+            "type": "number",
+            "example": 386
+          },
+          "repeatPayers": {
+            "type": "number",
+            "example": 168
+          },
+          "repeatRatePct": {
+            "type": "number",
+            "example": 43.5
+          },
+          "windowStart": {
+            "type": "string",
+            "example": "2026-07-03T00:00:00.000Z",
+            "format": "date-time"
+          },
+          "windowEnd": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "eligible",
+          "gross",
+          "excluded",
+          "dailyMean",
+          "growthPct",
+          "largestPayerPct",
+          "hhi",
+          "concentrationBand",
+          "uniquePayers",
+          "repeatPayers",
+          "repeatRatePct"
+        ]
+      },
+      "RevenueCustomerDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "payer-01",
+            "description": "Stable pseudonym. Payer addresses are never returned."
+          },
+          "revenue30d": {
+            "type": "number",
+            "example": 1890
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 14
+          },
+          "requests30d": {
+            "type": "number",
+            "example": 4210
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "example": "2026-06-12T00:00:00.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "label",
+          "revenue30d",
+          "sharePct",
+          "requests30d",
+          "firstSeenAt"
+        ]
+      },
+      "ExcludedRevenueDto": {
+        "type": "object",
+        "properties": {
+          "payers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevenueCustomerDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 540,
+            "description": "Total excluded from the eligible figure, USDC."
+          },
+          "byReason": {
+            "type": "object",
+            "example": {
+              "Payer age below 7 days": 320,
+              "Refunded within window": 220
+            },
+            "description": "Excluded amount by reason."
+          }
+        },
+        "required": [
+          "payers",
+          "total",
+          "byReason"
+        ]
+      },
+      "ConstraintDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "growthCap"
+          },
+          "label": {
+            "type": "string",
+            "example": "Growth cap"
+          },
+          "formula": {
+            "type": "string",
+            "example": "1,690.00 × 1.5",
+            "description": "The arithmetic, rendered for the borrower."
+          },
+          "value": {
+            "type": "number",
+            "example": 2535
+          },
+          "binding": {
+            "type": "boolean",
+            "example": true,
+            "description": "True for the rung that determined the limit."
+          },
+          "nearBinding": {
+            "type": "boolean",
+            "example": false
+          },
+          "advisory": {
+            "type": "boolean",
+            "example": false,
+            "description": "Shown for context; does not constrain."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "formula",
+          "value",
+          "binding"
+        ]
+      },
+      "FactorPenaltyDto": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "example": "C"
+          },
+          "label": {
+            "type": "string",
+            "example": "Customer concentration"
+          },
+          "value": {
+            "type": "number",
+            "example": 0.86
+          },
+          "weight": {
+            "type": "number",
+            "example": 0.2
+          },
+          "points": {
+            "type": "number",
+            "example": 2.8,
+            "description": "Contribution to the haircut, percentage points."
+          }
+        },
+        "required": [
+          "symbol",
+          "label",
+          "value",
+          "weight",
+          "points"
+        ]
+      },
+      "AssessmentDto": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number",
+            "example": 78
+          },
+          "tier": {
+            "type": "string",
+            "example": "Strong"
+          },
+          "limit": {
+            "type": "number",
+            "example": 2530
+          },
+          "previousLimit": {
+            "type": "number",
+            "example": 1690
+          },
+          "bindingKey": {
+            "type": "string",
+            "example": "growthCap",
+            "description": "Which rung decided the limit."
+          },
+          "ladder": {
+            "description": "Every candidate limit, in display order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConstraintDto"
+            }
+          },
+          "penalties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FactorPenaltyDto"
+            }
+          },
+          "quality": {
+            "type": "number",
+            "example": 0.79,
+            "description": "Composite quality factor."
+          },
+          "model": {
+            "type": "string",
+            "example": "riv-uw-2.1"
+          },
+          "assessedAt": {
+            "type": "string",
+            "example": "2026-08-02T14:00:00.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "score",
+          "tier",
+          "limit",
+          "previousLimit",
+          "bindingKey",
+          "ladder",
+          "penalties",
+          "quality",
+          "model",
+          "assessedAt"
+        ]
+      },
+      "AssessmentHistoryEntryDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "score": {
+            "type": "number",
+            "example": 78
+          },
+          "tier": {
+            "type": "string",
+            "example": "Strong"
+          },
+          "limit": {
+            "type": "number",
+            "example": 2530
+          },
+          "previousLimit": {
+            "type": "number",
+            "example": 1690
+          },
+          "bindingKey": {
+            "type": "string",
+            "example": "growthCap"
+          }
+        },
+        "required": [
+          "at",
+          "score",
+          "tier",
+          "limit",
+          "previousLimit",
+          "bindingKey"
+        ]
+      },
+      "CustodyStatusDto": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "example": "A"
+          },
+          "bindingOk": {
+            "type": "boolean",
+            "example": true,
+            "description": "Advertised payTo matches the deployed router."
+          },
+          "endpointUp": {
+            "type": "boolean",
+            "example": true
+          },
+          "routerAddress": {
+            "type": "object",
+            "example": "0x7f3a…c1d2",
+            "nullable": true
+          },
+          "endpointHash": {
+            "type": "object",
+            "example": "0x3b7d…e922",
+            "nullable": true
+          },
+          "coverageRatio": {
+            "type": "number",
+            "example": 0.98,
+            "description": "Routed revenue over expected revenue."
+          },
+          "coverageState": {
+            "type": "string",
+            "enum": [
+              "HEALTHY",
+              "DRIFTING",
+              "BROKEN"
+            ],
+            "example": "HEALTHY"
+          },
+          "uptimePct": {
+            "type": "number",
+            "example": 99.4
+          },
+          "repaymentSharePct": {
+            "type": "number",
+            "example": 20,
+            "description": "Percent of settled revenue routed to repayment."
+          },
+          "reserveSharePct": {
+            "type": "number",
+            "example": 2
+          },
+          "operatingSharePct": {
+            "type": "number",
+            "example": 78
+          }
+        },
+        "required": [
+          "model",
+          "bindingOk",
+          "endpointUp",
+          "routerAddress",
+          "endpointHash",
+          "coverageRatio",
+          "coverageState",
+          "uptimePct",
+          "repaymentSharePct",
+          "reserveSharePct",
+          "operatingSharePct"
+        ]
+      },
+      "AgentPolicyDto": {
+        "type": "object",
+        "properties": {
+          "maxPayment": {
+            "type": "number",
+            "example": 100,
+            "description": "Largest single payment the agent may make, USDC."
+          },
+          "maxDaily": {
+            "type": "number",
+            "example": 500
+          },
+          "spentToday": {
+            "type": "number",
+            "example": 182.4
+          },
+          "humanApprovalThreshold": {
+            "type": "number",
+            "example": 250,
+            "description": "Above this, an owner-wallet signature is required."
+          },
+          "allowedCategories": {
+            "example": [
+              "compute",
+              "data",
+              "storage"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockedCategories": {
+            "example": [
+              "marketing",
+              "payroll"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "policyChangeDelayHours": {
+            "type": "number",
+            "example": 24,
+            "description": "Delay before a change takes effect, so a compromised agent cannot widen its own limits and drain the line."
+          },
+          "pendingChangeAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the pending change applies."
+          }
+        },
+        "required": [
+          "maxPayment",
+          "maxDaily",
+          "spentToday",
+          "humanApprovalThreshold",
+          "allowedCategories",
+          "blockedCategories",
+          "policyChangeDelayHours"
+        ]
+      },
+      "UpdatePolicyDto": {
+        "type": "object",
+        "properties": {
+          "maxPayment": {
+            "type": "number",
+            "example": 150,
+            "minimum": 0
+          },
+          "maxDaily": {
+            "type": "number",
+            "example": 750,
+            "minimum": 0
+          },
+          "humanApprovalThreshold": {
+            "type": "number",
+            "example": 300,
+            "minimum": 0
+          },
+          "allowedCategories": {
+            "example": [
+              "compute",
+              "data"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockedCategories": {
+            "example": [
+              "marketing"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReserveStatusDto": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "number",
+            "example": 248.6
+          },
+          "target": {
+            "type": "number",
+            "example": 253
+          },
+          "coveragePct": {
+            "type": "number",
+            "example": 98.3
+          },
+          "contributionSharePct": {
+            "type": "number",
+            "example": 2,
+            "description": "Percent of settled revenue routed to the reserve."
+          },
+          "dailyContribution": {
+            "type": "number",
+            "example": 9,
+            "description": "Expected daily contribution at current revenue, USDC."
+          }
+        },
+        "required": [
+          "balance",
+          "target",
+          "coveragePct",
+          "contributionSharePct",
+          "dailyContribution"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "clx8f2k9a0000"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "icon": {
+            "type": "string",
+            "example": "✓"
+          },
+          "title": {
+            "type": "string",
+            "example": "Draw completed"
+          },
+          "body": {
+            "type": "string",
+            "example": "400.00 USDC to 0x2b18…9e04"
+          },
+          "unread": {
+            "type": "boolean",
+            "example": true
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x4a71…9f30"
+          },
+          "href": {
+            "type": "string",
+            "example": "/custody"
+          },
+          "cta": {
+            "type": "string",
+            "example": "Re-verify"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "icon",
+          "title",
+          "unread"
+        ]
+      },
+      "MarkReadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VerifyEndpointDto": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "example": "https://api.quotestream.dev/v1"
+          }
+        },
+        "required": [
+          "endpoint"
+        ]
+      },
+      "ProbeLineDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "example": "GET /v1/quote (unpaid) → 402 Payment Required"
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "✓",
+              "⚠",
+              "✕",
+              ""
+            ],
+            "example": "✓"
+          }
+        },
+        "required": [
+          "text",
+          "mark"
+        ]
+      },
+      "EndpointVerificationDto": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "boolean",
+            "example": true
+          },
+          "bindingOk": {
+            "type": "boolean",
+            "example": true,
+            "description": "Advertised payTo matches the deployed router."
+          },
+          "log": {
+            "description": "The probe log, in order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProbeLineDto"
+            }
+          },
+          "endpointHash": {
+            "type": "string",
+            "example": "0x3b7d…e922",
+            "description": "Written onchain once bound."
+          }
+        },
+        "required": [
+          "verified",
+          "bindingOk",
+          "log"
+        ]
+      },
+      "RegisterServiceDto": {
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "example": "QuoteStream Market Data API",
+            "maxLength": 120
+          },
+          "category": {
+            "type": "string",
+            "example": "Data lookup and static datasets"
+          },
+          "endpoint": {
+            "type": "string",
+            "example": "https://api.quotestream.dev/v1"
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "example": "A"
+          },
+          "operator": {
+            "type": "string",
+            "example": "QuoteStream Labs Ltd",
+            "maxLength": 200
+          },
+          "jurisdiction": {
+            "type": "string",
+            "example": "Singapore",
+            "maxLength": 100
+          },
+          "pricePerRequest": {
+            "type": "number",
+            "example": 0.04,
+            "description": "Advertised price per request, USDC."
+          }
+        },
+        "required": [
+          "serviceName",
+          "category",
+          "endpoint"
+        ]
+      },
+      "ServiceRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "clx8f2k9a0000"
+          },
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "serviceName": {
+            "type": "string",
+            "example": "QuoteStream Market Data API"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION"
+            ],
+            "example": "OBSERVATION"
+          },
+          "observationDays": {
+            "type": "number",
+            "example": 30,
+            "description": "Days of observation before the first assessment."
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "serviceName",
+          "status",
+          "observationDays",
+          "registeredAt"
+        ]
+      },
+      "DrawRequestDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 400,
+            "minimum": 0.000001,
+            "description": "USDC, to six decimal places."
+          },
+          "category": {
+            "type": "string",
+            "example": "Model and data API expenses",
+            "description": "Recorded against the draw and checked against the wallet policy."
+          }
+        },
+        "required": [
+          "amount",
+          "category"
+        ]
+      },
+      "ReceiptDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "draw",
+              "repay",
+              "deposit",
+              "withdraw"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "example": 400,
+            "description": "Amount actually moved, which may be less than requested."
+          },
+          "queued": {
+            "type": "number",
+            "example": 0,
+            "description": "Portion of a withdrawal placed in the FIFO queue."
+          },
+          "shares": {
+            "type": "number",
+            "example": 4962.31,
+            "description": "Vault shares minted on deposit."
+          },
+          "clearsDebt": {
+            "type": "boolean",
+            "example": false
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x9e37…0000"
+          }
+        },
+        "required": [
+          "kind",
+          "amount",
+          "tx"
+        ]
+      },
+      "MutationResultDto": {
+        "type": "object",
+        "properties": {
+          "receipt": {
+            "$ref": "#/components/schemas/ReceiptDto"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ProtocolSnapshotDto"
+          }
+        },
+        "required": [
+          "receipt",
+          "snapshot"
+        ]
+      },
+      "AmountRequestDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 400,
+            "minimum": 0.000001,
+            "description": "USDC, to six decimal places."
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "VaultPortfolioDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x8e11…4c73"
+          },
+          "shares": {
+            "type": "number",
+            "example": 4962.31
+          },
+          "sharePrice": {
+            "type": "number",
+            "example": 1.007597
+          },
+          "value": {
+            "type": "number",
+            "example": 5000,
+            "description": "Current value of the position, USDC."
+          },
+          "supplied": {
+            "type": "number",
+            "example": 5000,
+            "description": "Cumulative amount supplied."
+          },
+          "earned": {
+            "type": "number",
+            "example": 37.99,
+            "description": "Value less amount supplied. May be negative."
+          },
+          "walletBalance": {
+            "type": "number",
+            "example": 12400
+          },
+          "queued": {
+            "type": "number",
+            "example": 0,
+            "description": "Sitting in the FIFO exit queue."
+          },
+          "queueFunded": {
+            "type": "number",
+            "example": 0,
+            "description": "Part of the queued amount already funded."
+          },
+          "shareOfVaultPct": {
+            "type": "number",
+            "example": 19.85,
+            "description": "Share of total vault assets, percent."
+          }
+        },
+        "required": [
+          "address",
+          "shares",
+          "sharePrice",
+          "value",
+          "supplied",
+          "earned",
+          "walletBalance",
+          "queued",
+          "queueFunded",
+          "shareOfVaultPct"
+        ]
+      },
+      "VaultPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "displayedApyPct": {
+            "type": "number",
+            "example": 6,
+            "description": "What the vault displays, subsidy included."
+          },
+          "organicApyPct": {
+            "type": "number",
+            "example": 3.08,
+            "description": "Earned from borrower interest alone."
+          },
+          "subsidyApyPct": {
+            "type": "number",
+            "example": 2.92,
+            "description": "Paid from the protocol subsidy. Ends on the date below and is not guaranteed."
+          },
+          "subsidyEnds": {
+            "type": "string",
+            "example": "2026-10-30",
+            "description": "When the subsidy stops."
+          },
+          "blendedBorrowerRatePct": {
+            "type": "number",
+            "example": 12.1,
+            "description": "Blended rate paid by borrowers."
+          },
+          "protocolSpreadPct": {
+            "type": "number",
+            "example": 3,
+            "description": "Protocol’s share of borrower interest."
+          },
+          "interestGenerated": {
+            "type": "number",
+            "example": 184.2
+          },
+          "realizedLosses": {
+            "type": "number",
+            "example": 0
+          },
+          "coverageMultiple": {
+            "type": "number",
+            "example": 4.9,
+            "description": "First-loss cover over realised losses to date."
+          },
+          "weightedMeanPaybackDays": {
+            "type": "number",
+            "example": 26,
+            "description": "Weighted mean days to repay the book."
+          }
+        },
+        "required": [
+          "displayedApyPct",
+          "organicApyPct",
+          "subsidyApyPct",
+          "subsidyEnds",
+          "blendedBorrowerRatePct",
+          "protocolSpreadPct",
+          "interestGenerated",
+          "realizedLosses",
+          "coverageMultiple",
+          "weightedMeanPaybackDays"
+        ]
+      },
+      "SnapshotOnlyResultDto": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/ProtocolSnapshotDto"
+          }
+        },
+        "required": [
+          "snapshot"
+        ]
+      },
+      "WatchlistEntryDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x4c30…f18b"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "WATCH",
+              "RESTRICTED",
+              "DELINQUENT",
+              "DEFAULTED"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "example": 58
+          },
+          "scoreDelta": {
+            "type": "number",
+            "example": -4,
+            "description": "Change since the previous assessment."
+          },
+          "tier": {
+            "type": "string",
+            "example": "Standard"
+          },
+          "principal": {
+            "type": "number",
+            "example": 1250
+          },
+          "coverageRatio": {
+            "type": "number",
+            "example": 0.71
+          },
+          "trigger": {
+            "type": "string",
+            "example": "coverage ratio 0.71",
+            "description": "Why it is on the list."
+          }
+        },
+        "required": [
+          "handle",
+          "status",
+          "score",
+          "scoreDelta",
+          "tier",
+          "principal",
+          "coverageRatio",
+          "trigger"
+        ]
+      },
+      "ExposureBucketDto": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "example": "Strong"
+          },
+          "borrowers": {
+            "type": "number",
+            "example": 3
+          },
+          "principal": {
+            "type": "number",
+            "example": 3970
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 46.9,
+            "description": "Share of outstanding principal."
+          }
+        },
+        "required": [
+          "tier",
+          "borrowers",
+          "principal",
+          "sharePct"
+        ]
+      },
+      "ExposureReportDto": {
+        "type": "object",
+        "properties": {
+          "outstandingPrincipal": {
+            "type": "number",
+            "example": 8470
+          },
+          "vaultAssets": {
+            "type": "number",
+            "example": 25000
+          },
+          "utilization": {
+            "type": "number",
+            "example": 0.3388
+          },
+          "byTier": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExposureBucketDto"
+            }
+          },
+          "largestExposure": {
+            "type": "number",
+            "example": 2400,
+            "description": "Largest single-borrower exposure, USDC."
+          },
+          "largestExposurePct": {
+            "type": "number",
+            "example": 9.6,
+            "description": "Largest exposure as a share of vault assets."
+          },
+          "perBorrowerCapPct": {
+            "type": "number",
+            "example": 10,
+            "description": "Per-borrower cap as a share of vault assets. PRD §31.5."
+          },
+          "breaches": {
+            "type": "number",
+            "example": 0,
+            "description": "Borrowers currently above the cap."
+          }
+        },
+        "required": [
+          "outstandingPrincipal",
+          "vaultAssets",
+          "utilization",
+          "byTier",
+          "largestExposure",
+          "largestExposurePct",
+          "perBorrowerCapPct",
+          "breaches"
+        ]
+      },
+      "RiskParameterDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "repaymentBps"
+          },
+          "label": {
+            "type": "string",
+            "example": "Repayment share"
+          },
+          "value": {
+            "type": "string",
+            "example": "2000 bps"
+          },
+          "description": {
+            "type": "string",
+            "example": "Basis points of settled revenue routed to repayment."
+          },
+          "reference": {
+            "type": "string",
+            "example": "PRD §12.2"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "value",
+          "description",
+          "reference"
+        ]
+      },
+      "DeclareDefaultDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x4c30…f18b"
+          },
+          "principal": {
+            "type": "number",
+            "example": 1850,
+            "description": "Principal being written down, USDC."
+          },
+          "trigger": {
+            "type": "string",
+            "example": "coverage ratio 0.31",
+            "description": "The condition that triggered the declaration."
+          },
+          "evidenceHash": {
+            "type": "string",
+            "example": "0x6d20…be15",
+            "description": "Hash of the evidence bundle."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "automatic",
+              "operator"
+            ],
+            "example": "operator",
+            "description": "Whether the protocol declared it or a person did."
+          }
+        },
+        "required": [
+          "handle",
+          "principal",
+          "trigger",
+          "evidenceHash",
+          "source"
+        ]
+      },
+      "DefaultDeclarationResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "clx8f2k9a0000"
+          },
+          "handle": {
+            "type": "string",
+            "example": "0x4c30…f18b"
+          },
+          "principal": {
+            "type": "number",
+            "example": 1850
+          },
+          "declaredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notice": {
+            "type": "string",
+            "example": "The record is permanent. It may be cured, but no interface path deletes it."
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "principal",
+          "declaredAt",
+          "notice"
+        ]
+      },
+      "AuditEntryDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "string",
+            "example": "0x4a7c…7e02"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "borrower",
+              "lp",
+              "ops",
+              "partner"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "example": "risk.default.declared"
+          },
+          "subject": {
+            "type": "string",
+            "example": "0x4c30…f18b"
+          },
+          "requestId": {
+            "type": "string",
+            "example": "5f2c1a9e-…"
+          }
+        },
+        "required": [
+          "at",
+          "actor",
+          "action"
+        ]
+      },
+      "PartnerScoreDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "score": {
+            "type": "number",
+            "example": 78,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "Prime",
+              "Strong",
+              "Standard",
+              "Restricted",
+              "Ineligible"
+            ]
+          },
+          "monthsObserved": {
+            "type": "number",
+            "example": 2,
+            "description": "Whole months of observed history."
+          },
+          "repaymentCycles": {
+            "type": "number",
+            "example": 1
+          },
+          "defaultsRecorded": {
+            "type": "number",
+            "example": 0
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "description": "How revenue reaches the protocol."
+          },
+          "attestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "model": {
+            "type": "string",
+            "example": "riv-uw-2.1"
+          }
+        },
+        "required": [
+          "handle",
+          "score",
+          "tier",
+          "monthsObserved",
+          "repaymentCycles",
+          "defaultsRecorded",
+          "custody",
+          "attestedAt",
+          "model"
+        ]
+      }
+    }
+  }
+}
