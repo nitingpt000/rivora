@@ -14,6 +14,7 @@ import type {
   AssessmentDetail,
   AssessmentHistoryEntry,
   CustodyStatus,
+  DeclarationStatus,
   DefaultRegistry,
   ExposureReport,
   LimitRecommendation,
@@ -140,6 +141,8 @@ export interface SimState {
   anomaly: AnomalyDetail | null;
   /** A named borrower, loaded on the operator's detail screen. */
   riskBorrower: BorrowerRiskDetail | null;
+  /** Declarations still collecting operator signatures. */
+  pendingDeclarations: DeclarationStatus[] | null;
 
   /** The partner's own keys and usage. Loaded on the partner surface. */
   partnerConsole: PartnerConsole | null;
@@ -284,6 +287,7 @@ export function initialState(): SimState {
     recommendations: null,
     anomaly: null,
     riskBorrower: null,
+    pendingDeclarations: null,
     partnerConsole: null,
     sandboxProfiles: null,
     sandboxResult: null,

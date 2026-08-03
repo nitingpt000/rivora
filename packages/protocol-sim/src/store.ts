@@ -15,6 +15,7 @@ import type {
   Constraint,
   CustodyStatus,
   DefaultRecordEntry,
+  DeclarationStatus,
   DefaultRegistry,
   ExposureBucket,
   ExposureReport,
@@ -91,6 +92,15 @@ export interface SimActions {
   loadPartner: () => Promise<void>;
   /** Loads one borrower for the operator's detail screen. */
   loadRiskBorrower: (handle: string) => Promise<void>;
+  /** Proposes a default. First signature of the quorum; commits nothing. */
+  proposeDefault: (input: {
+    handle: string;
+    principal: number;
+    trigger: string;
+    evidenceHash: string;
+  }) => Promise<DeclarationStatus | null>;
+  /** Signs a pending declaration. Commits it at quorum. */
+  approveDefault: (id: string) => Promise<DeclarationStatus | null>;
   /** Loads a public reputation card. Needs no session. */
   loadReputation: (handle: string) => Promise<void>;
   loadVault: () => Promise<void>;
@@ -381,11 +391,21 @@ export const useProtocol = create<SimStore>()((set, get) => {
           risk.recommendations(),
         ]);
 
+        const pendingDeclarations = await risk.pendingDefaults().catch(() => []);
+
         // Absent unless something was detected. A 404 here is the normal case,
         // so it must not fail the whole surface.
         const anomaly = await risk.anomaly().catch(() => null);
 
-        set({ watchlist, exposure, riskParams, riskAlerts, recommendations, anomaly });
+        set({
+          watchlist,
+          exposure,
+          riskParams,
+          riskAlerts,
+          recommendations,
+          pendingDeclarations,
+          anomaly,
+        });
       } catch (cause) {
         set({ syncError: message(cause) });
       }
@@ -564,6 +584,32 @@ export const useProtocol = create<SimStore>()((set, get) => {
       }
     },
 
+    proposeDefault: async (input) => {
+      set({ pending: true, mutationError: null });
+      try {
+        const declaration = await api().risk.declareDefault({ ...input, source: 'operator' });
+        set({ pending: false });
+        await get().loadRisk();
+        return declaration;
+      } catch (cause) {
+        set({ pending: false, mutationError: message(cause) });
+        return null;
+      }
+    },
+
+    approveDefault: async (id) => {
+      set({ pending: true, mutationError: null });
+      try {
+        const declaration = await api().risk.approveDefault(id);
+        set({ pending: false });
+        await get().loadRisk();
+        return declaration;
+      } catch (cause) {
+        set({ pending: false, mutationError: message(cause) });
+        return null;
+      }
+    },
+
     loadSandbox: async () => {
       try {
         const profiles = await api().sandbox.profiles();
@@ -621,6 +667,7 @@ export type {
   Constraint,
   CustodyStatus,
   DefaultRecordEntry,
+  DeclarationStatus,
   DefaultRegistry,
   ExposureBucket,
   ExposureReport,
