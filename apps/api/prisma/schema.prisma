@@ -105,6 +105,13 @@ model Assessment {
   borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
 
   at            DateTime @default(now())
+  /// Settlement day this ran on.
+  ///
+  /// The assessment cadence follows the protocol clock rather than wall-clock:
+  /// a keeper that has been paused for a month has not observed a month of
+  /// revenue, and assessing as though it had would underwrite against data
+  /// that was never settled.
+  atDay         Int      @default(0)
   score         Int
   tier          Tier
   limitAmount   Decimal  @db.Decimal(20, 6)
@@ -536,8 +543,33 @@ model RevenueDay {
   excluded Decimal  @default(0) @db.Decimal(20, 6)
   requests Int      @default(0)
 
+  payers RevenueDayPayer[]
+
   @@unique([borrowerId, date])
   @@index([borrowerId, date(sort: Desc)])
+}
+
+/// One payer's contribution to one settled day.
+///
+/// The grain that makes `PayerSummary` a *window* rather than a running total.
+/// Concentration and diversity are 30-day measures; accumulating into a single
+/// per-payer row instead would drift upward forever as days aged out of the
+/// window but never out of the sum.
+model RevenueDayPayer {
+  id           String     @id @default(cuid())
+  revenueDayId String
+  revenueDay   RevenueDay @relation(fields: [revenueDayId], references: [id], onDelete: Cascade)
+
+  /// Stable pseudonym. The indexer resolves the wallet; the API never sees it.
+  label    String
+  amount   Decimal @db.Decimal(20, 6)
+  requests Int     @default(0)
+
+  excluded        Boolean @default(false)
+  exclusionReason String?
+
+  @@unique([revenueDayId, label])
+  @@index([label])
 }
 
 /// Movement in the borrower's loss reserve.

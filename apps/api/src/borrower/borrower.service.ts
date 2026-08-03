@@ -1,18 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import {
-  calculateLimit,
-  coefficientOfVariation,
-  concentrationBand,
-  factorPenalties,
-  qualityFactor,
-  routedCoverageState,
-  scoreComponents,
-} from '@rivora/core';
+import { concentrationBand, routedCoverageState } from '@rivora/core';
 
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerError } from '../common/ledger.error';
 import type { SessionUserDto } from '../auth/auth.dto';
+import { AssessmentService } from '../assessment/assessment.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
@@ -53,6 +46,7 @@ export class BorrowerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly assessments: AssessmentService,
   ) {}
 
   /**
@@ -425,86 +419,31 @@ export class BorrowerService {
    * borrower who improved their concentration yesterday should see the rung
    * move before the next scheduled assessment.
    */
+  /**
+   * The current assessment, recomputed from live inputs.
+   *
+   * Delegated to `AssessmentService` so the figure a borrower reads here is
+   * produced by the same code that writes the limit they can actually draw
+   * against. These were separate computations once, and the stored limit only
+   * ever came from the seed.
+   */
   async assessment(user: SessionUserDto): Promise<AssessmentDto> {
     const borrower = await this.forSession(user);
-    const credit = borrower.creditLine!;
-    const revenue = borrower.revenueWindow!;
-    const health = borrower.health!;
-    const vault = await this.prisma.vaultState.findUnique({ where: { id: 'singleton' } });
-
-    const factors = {
-      S: health.factorS,
-      C: health.factorC,
-      V: health.factorV,
-      D: health.factorD,
-      M: health.factorM,
-      G: health.factorG,
-    };
-
-    const decision = calculateLimit({
-      normalizedRevenue30d: toNumber(revenue.eligible),
-      tier: credit.tier,
-      factors,
-      custody: borrower.custody,
-      repaymentBps: credit.repaymentBps,
-      previousLimit: toNumber(credit.previousLimit),
-      vaultAssets: toNumber(vault?.totalAssets ?? 0),
-      historyDays: credit.historyDays,
-      completedCycles: credit.completedCycles,
-    });
+    const result = await this.assessments.compute(borrower);
 
     return {
-      score: credit.score,
-      tier: credit.tier,
-      limit: decision.limit,
-      previousLimit: toNumber(credit.previousLimit),
-      bindingKey: decision.bindingKey,
-      ladder: decision.ladder,
-      penalties: factorPenalties(factors),
-      components: await this.scoreBreakdown(borrower),
-      quality: qualityFactor(factors),
-      model: 'riv-uw-2.1',
-      assessedAt: health.updatedAt.toISOString(),
+      score: result.score,
+      tier: result.tier,
+      limit: result.limit,
+      previousLimit: result.previousLimit,
+      bindingKey: result.bindingKey,
+      ladder: result.ladder as AssessmentDto['ladder'],
+      penalties: result.penalties,
+      components: result.components,
+      quality: result.quality,
+      model: result.model,
+      assessedAt: result.assessedAt,
     };
-  }
-
-  /**
-   * The weighted signals behind the score, recomputed from observed state.
-   *
-   * Recomputed rather than stored, so the breakdown can never drift from the
-   * inputs it claims to explain. `@rivora/core` owns the arithmetic; this only
-   * assembles the observations to hand it.
-   */
-  private async scoreBreakdown(borrower: BorrowerGraph) {
-    const credit = borrower.creditLine!;
-    const revenue = borrower.revenueWindow!;
-    const health = borrower.health!;
-
-    const [series, defaults, reserveTarget] = await Promise.all([
-      this.dailySeries(borrower.id),
-      this.prisma.defaultRecord.count({ where: { borrowerId: borrower.id } }),
-      Promise.resolve(toNumber(credit.reserveTarget)),
-    ]);
-
-    const cycles = credit.completedCycles;
-
-    return scoreComponents({
-      uptimePct: health.uptimePct,
-      successPct: health.successPct,
-      revenueCv: coefficientOfVariation(series),
-      // A default counts against the record permanently, whether or not it
-      // was later cured.
-      onTimeRatioPct: cycles > 0 ? Math.max(0, ((cycles - defaults) / cycles) * 100) : 100,
-      completedCycles: cycles,
-      largestPayerPct: revenue.largestPayerPct,
-      hhi: revenue.hhi,
-      uniquePayers: revenue.uniquePayers,
-      custody: borrower.custody,
-      historyDays: credit.historyDays,
-      growthPct: revenue.growthPct,
-      reserveCoveragePct:
-        reserveTarget > 0 ? (toNumber(credit.reserve) / reserveTarget) * 100 : 100,
-    });
   }
 
   /**

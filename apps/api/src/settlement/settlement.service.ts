@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { applyRepayment, borrowerRate, dailyInterest, utilization } from '@rivora/core';
 
 import { dec, shares8, toNumber, usdc6 } from '../common/decimal';
 import type { SnapshotOnlyResultDto } from '../contracts/operations.dto';
+import { AssessmentService } from '../assessment/assessment.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { SnapshotService } from '../snapshot/snapshot.service';
 import { VaultService } from '../vault/vault.service';
@@ -22,12 +23,46 @@ const QUEUE_FUNDING_PER_DAY = 186.34;
  */
 @Injectable()
 export class SettlementService {
+  private readonly logger = new Logger(SettlementService.name);
+
   constructor(
     private readonly snapshots: SnapshotService,
     private readonly ledger: LedgerService,
+    private readonly assessments: AssessmentService,
   ) {}
 
   async tick(): Promise<SnapshotOnlyResultDto> {
+    const day = await this.advanceOneDay();
+
+    /**
+     * Assessments run after the settlement transaction commits, not inside it.
+     *
+     * `ledger.run` is a Prisma transaction and `reassess` opens its own;
+     * nesting them would open a second connection that cannot see the day just
+     * written. Running afterwards also means the underwriter reads the state
+     * settlement produced rather than the one it replaced.
+     */
+    for (const borrowerId of await this.assessments.dueForReassessment(day)) {
+      try {
+        await this.assessments.reassess(borrowerId, `settlement day ${day}`);
+      } catch (cause) {
+        // One borrower failing to underwrite must not stop the protocol clock
+        // for everyone else. The day is already committed.
+        this.logger.error(`could not reassess ${borrowerId}: ${String(cause)}`);
+      }
+    }
+
+    const [state, events, alerts] = await Promise.all([
+      this.snapshots.loadState(),
+      this.snapshots.recentEvents(),
+      this.snapshots.recentAlerts(),
+    ]);
+
+    return { snapshot: this.snapshots.project(state, events, alerts) };
+  }
+
+  /** The settlement itself. Returns the day it advanced to. */
+  private async advanceOneDay(): Promise<number> {
     return this.ledger.run(async (tx) => {
       const state = await this.snapshots.loadState(tx);
       const credit = state.creditLine!;
@@ -127,13 +162,7 @@ export class SettlementService {
         borrowerId: state.id,
       });
 
-      const [next, events, alerts] = await Promise.all([
-        this.snapshots.loadState(tx),
-        this.snapshots.recentEvents(tx),
-        this.snapshots.recentAlerts(tx),
-      ]);
-
-      return { snapshot: this.snapshots.project(next, events, alerts) };
+      return vault.day + 1;
     });
   }
 }

@@ -9,6 +9,7 @@ import {
   VAULT,
 } from '@rivora/core';
 
+import { AssessmentService } from '../assessment/assessment.service';
 import { AuditService } from '../audit/audit.service';
 import type { SessionUserDto } from '../auth/auth.dto';
 import { dec, toNumber, usdc6 } from '../common/decimal';
@@ -43,6 +44,7 @@ export class RiskService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
+    private readonly assessments: AssessmentService,
   ) {}
 
   /**
@@ -302,6 +304,29 @@ export class RiskService {
         ];
       })
       .sort((a, b) => Math.abs(b.recommended - b.current) - Math.abs(a.recommended - a.current));
+  }
+
+  /**
+   * Forces an assessment for one borrower.
+   *
+   * Resolves the handle here so the operator names a borrower the way every
+   * other risk route does, rather than having to know an internal id.
+   */
+  async reassess(handle: string): Promise<void> {
+    const borrower = await this.prisma.borrower.findUnique({
+      where: { handle },
+      select: { id: true },
+    });
+
+    if (!borrower) {
+      throw new NotFoundException({
+        error: `No borrower is registered under the handle "${handle}".`,
+        code: 'borrower_not_found',
+        statusCode: 404,
+      });
+    }
+
+    await this.assessments.reassess(borrower.id, 'operator request');
   }
 
   /**

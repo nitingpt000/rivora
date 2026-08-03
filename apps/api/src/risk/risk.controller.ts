@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -93,6 +103,24 @@ export class RiskController {
   @ApiOkResponse({ type: [LimitRecommendationDto] })
   recommendations(): Promise<LimitRecommendationDto[]> {
     return this.risk.recommendations();
+  }
+
+  @Post('borrower/:handle/reassess')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Force an assessment now',
+    description: [
+      'Runs the underwriter immediately rather than waiting for the scheduled interval. PRD §16.6 lists the triggers that justify this: a material revenue change, a default warning, a large refund, suspicious activity, or a completed repayment.',
+      '',
+      'Writes an assessment record either way. A borrower who is RESTRICTED or DEFAULTED keeps the limit their status imposed — an assessment cannot hand credit back to a borrower a risk decision just took it from.',
+    ].join('\n'),
+  })
+  @ApiParam({ name: 'handle', example: '0x9c4e…a7f1' })
+  @ApiOkResponse({ type: BorrowerRiskDetailDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  async reassess(@Param('handle') handle: string): Promise<BorrowerRiskDetailDto> {
+    await this.risk.reassess(handle);
+    return this.risk.borrower(handle);
   }
 
   @Get('borrower/:handle')
