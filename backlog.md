@@ -219,17 +219,26 @@ assumes the optimistic one.
 
 ---
 
-## 9. Declaring a default is single-signature
+## ~~9. Declaring a default is single-signature~~ — closed
 
-PRD §33 specifies an operator quorum. `POST /risk/defaults/declare` takes one
-operator's session and writes a permanent, public record that cannot be
-deleted.
+Declaring is now propose → approve → commit. `POST /risk/defaults/declare`
+opens a pending `DefaultDeclaration` carrying the proposer's signature and
+commits nothing; `POST /risk/defaults/:id/approve` adds a signature, and the
+permanent record is written only when the quorum is met.
 
-The gap is called out in the endpoint's own Swagger description rather than
-being silently skipped, but calling it out is not the same as fixing it.
+Uniqueness on `(declaration, operator)` is what makes two signatures mean two
+people rather than one person twice — the proposer approving their own
+declaration is refused. A second *proposal* against the same borrower is
+refused rather than merged: merging would attach a signature to figures the
+second operator never read.
 
-**To close it:** a pending-declaration record requiring N distinct operator
-signatures before it commits, with the signatures themselves recorded.
+The commit is one transaction — record, DEFAULTED credit line, realised vault
+loss and audit rows land together or not at all. The declared principal is
+re-validated at commit, because settlement repays principal daily and the
+balance can move between signatures.
+
+A second operator is seeded (`dev-session.mjs ops2`), since a quorum nobody can
+complete is a lockout. Ten smoke checks cover the flow and its refusals.
 
 ---
 
@@ -241,50 +250,40 @@ that is a substitute for an audit.
 
 ---
 
-## 11. Two default-related screens invent the balances they reason about
+## ~~11. Two default-related screens invent the balances they reason about~~ — closed
 
-Both compute real arithmetic over literal inputs, so the output looks derived
-and is not.
+**Declare** reads `?handle=`, loads that borrower, and runs the loss waterfall
+over their actual principal, accrued interest and reserve against the live
+first-loss tranche and protocol reserve. The triggers are measured rather than
+asserted — and the two that need a time series this console does not load read
+as *unknown* rather than as *not fired*, because "no" and "not checked" are
+different answers and only one is safe to act on.
 
-**[apps/web/src/app/risk/declare/page.tsx](apps/web/src/app/risk/declare/page.tsx)** —
-`OUTSTANDING = 4_200` and `ACCRUED = 38.1` are fed to `applyLossWaterfall`, so
-the loss preview an operator reads *before declaring a permanent, public
-default* is computed from numbers no borrower owes. The screen also ignores the
-`?handle=` parameter that the watchlist, borrower detail and anomaly screens
-now pass it, so it does not know which borrower it is talking about at all.
+**Recovery** reads the borrower's own record from the public default registry.
+Outstanding-at-default and recovered come from the record; the daily recovery
+rate is the 50% recovery share against live revenue. A borrower with no default
+sees an honest empty state instead of a fabricated cure in progress.
 
-**[apps/web/src/app/recovery/page.tsx](apps/web/src/app/recovery/page.tsx)** —
-`OUTSTANDING_AT_DEFAULT = 2_000` and `RECOVERED = 640` drive the borrower's own
-cure-progress view. A borrower reading how much they have left to repay is
-reading a constant.
-
-This is the same class of problem as item 1 and a worse instance of it: a
-fabricated figure sitting immediately before an irreversible action, shown as
-justification for taking it.
-
-**To close it:**
-
-- Declare: read the handle, load that borrower through
-  `GET /risk/borrower/:handle` — which already returns principal, accrued
-  interest and reserve — and run the waterfall over those. The endpoint exists;
-  only the screen is missing.
-- Recovery: needs the borrower's own default record. `GET /defaults` returns
-  the public registry with `principal` and `recovered` per record, but not
-  scoped to the caller; either filter it borrower-side or add the record to the
-  borrower surface.
+Both branches verified in the browser: the empty state, the populated state,
+and the already-defaulted guard.
 
 ---
 
-## 12. Revenue seasoning is not applied
+## ~~12. Revenue seasoning is not applied~~ — closed
 
-PRD §13.2 requires a three-day delay between settlement and eligibility, so
-refunds and reversals resolve before revenue supports credit. The constant
-`UNDERWRITING.seasoningDays` exists; nothing filters on it. Every settled day
-counts toward the base immediately.
+`AssessmentService.compute` now drops the most recent
+`UNDERWRITING.seasoningDays` settled days before underwriting, and widens the
+query so the window still fills.
 
-**To close it:** exclude the most recent `seasoningDays` from the window in
-`AssessmentService.compute`. Small change, but it shifts every limit, so it
-wants its own verification pass rather than being folded into another one.
+The stronger property, and the one the tests assert: an unseasoned day is not
+merely clamped, it is **absent**. A 50,000 USDC day that settled yesterday
+moves the limit by exactly nothing. Once it seasons it counts — through the
+median clamp, not raw.
+
+Seasoning is measured in settled days rather than wall-clock, for the same
+reason the assessment cadence is: this book runs on the settlement clock.
+Seasoned days still appear on the revenue screen, because showing what settled
+and lending against it are different questions.
 
 ---
 

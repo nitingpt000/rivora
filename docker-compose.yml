@@ -64,6 +64,10 @@ services:
       # This compose file describes a local stack seeded with public test keys.
       # A real deployment omits this and the sign-in helper refuses to run.
       DEV_SESSIONS: 'true'
+      # The smoke suite makes ~140 calls in a few seconds, which trips the
+      # production default of 120/min mid-run and fails nondeterministically.
+      # Local stack only; a real deployment keeps the default.
+      THROTTLE_LIMIT: '600'
       # Local development value. The API refuses to start in production
       # without one, which is why it is set here rather than defaulted in
       # code — a shipped default secret is a forgeable session token for

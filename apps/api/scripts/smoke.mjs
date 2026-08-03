@@ -22,6 +22,7 @@ const KEYS = {
   borrower: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
   lp: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a',
   ops: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+  ops2: '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e',
   stranger: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba',
 };
 
@@ -502,6 +503,113 @@ const stillRestricted = (
 ).body;
 check('a restricted borrower keeps its imposed limit', stillRestricted.limit, 0);
 check('and its status', stillRestricted.status, 'RESTRICTED');
+
+console.log('\nDefault quorum');
+/**
+ * Committing a default is permanent, so this section consumes one healthy
+ * peer per run. When every candidate has been defaulted it falls back to
+ * verifying the guards only — reseed (`pnpm --filter @rivora/api db:seed`)
+ * to restore full coverage.
+ */
+const ops2Session = await signIn(privateKeyToAccount(KEYS.ops2));
+const ops2Auth = { authorization: `Bearer ${ops2Session.token}` };
+check('second operator resolves as ops', ops2Session.user?.role, 'ops');
+
+const candidates = ['0x4c30…f18b', '0xb731…9e40', '0xe240…7b19', '0x1f88…20ce'];
+let quorumTarget = null;
+
+for (const handle of candidates) {
+  const detail = await call(`/risk/borrower/${encodeURIComponent(handle)}`, { headers: opsAuth });
+  if (detail.body?.status !== 'DEFAULTED') {
+    quorumTarget = { handle, principal: detail.body.principal };
+    break;
+  }
+}
+
+if (quorumTarget) {
+  const declareBody = (principal) =>
+    JSON.stringify({
+      handle: quorumTarget.handle,
+      principal,
+      trigger: 'smoke: coverage drift, uncured',
+      evidenceHash: '0xsmoke…evidence',
+      source: 'operator',
+    });
+
+  const proposed = await call('/risk/defaults/declare', {
+    method: 'POST',
+    headers: opsAuth,
+    body: declareBody(quorumTarget.principal),
+  });
+  check('a proposal opens pending, commits nothing', proposed.body?.status, 'pending');
+  check('it carries one signature of two', proposed.body?.signatures?.length, 1);
+
+  check(
+    'the proposer cannot approve their own declaration',
+    (
+      await call(`/risk/defaults/${proposed.body.id}/approve`, {
+        method: 'POST',
+        headers: opsAuth,
+      })
+    ).body?.code,
+    'already_signed',
+  );
+
+  check(
+    'a second proposal is refused, not merged',
+    (
+      await call('/risk/defaults/declare', {
+        method: 'POST',
+        headers: ops2Auth,
+        body: declareBody(1),
+      })
+    ).body?.code,
+    'declaration_pending',
+  );
+
+  const still = await call(`/risk/borrower/${encodeURIComponent(quorumTarget.handle)}`, {
+    headers: opsAuth,
+  });
+  check('one signature has not defaulted anyone', still.body?.status !== 'DEFAULTED', true);
+
+  const committed = await call(`/risk/defaults/${proposed.body.id}/approve`, {
+    method: 'POST',
+    headers: ops2Auth,
+  });
+  check('a distinct second signature commits', committed.body?.status, 'committed');
+
+  const defaulted = await call(`/risk/borrower/${encodeURIComponent(quorumTarget.handle)}`, {
+    headers: opsAuth,
+  });
+  check('the borrower is DEFAULTED', defaulted.body?.status, 'DEFAULTED');
+  check('the limit is withdrawn', defaulted.body?.limit, 0);
+
+  const registry = await call('/defaults');
+  check(
+    'the record is public',
+    registry.body.records.some((r) => r.borrower === quorumTarget.handle),
+    true,
+  );
+} else {
+  console.log('  (every candidate already defaulted — verifying guards only; reseed for full coverage)');
+  check(
+    'declaring on a defaulted borrower is refused',
+    (
+      await call('/risk/defaults/declare', {
+        method: 'POST',
+        headers: opsAuth,
+        body: JSON.stringify({
+          handle: candidates[0],
+          principal: 1,
+          trigger: 'smoke: guard check',
+          evidenceHash: '0xsmoke…guard',
+          source: 'operator',
+        }),
+      })
+    ).body?.code,
+    'already_defaulted',
+  );
+}
 
 console.log('\nUsage metering');
 // Baseline first: the suite has already made partner calls above, so the
