@@ -93,23 +93,104 @@ beyond the seed being run by hand.
 
 ---
 
-## 4. Money movement is a database write, not a contract call
+## ~~4. Revenue only ever arrived by seeding~~ — closed
 
-**Where:** [apps/api/src/chain/chain.service.ts](apps/api/src/chain/chain.service.ts)
+Nothing wrote `RevenueDay` or `PayerSummary` outside the seed, so the score,
+the limit and the repayment budget were all correct arithmetic over a fixture.
 
-`ChainService` has both implementations. `LedgerChainService` writes to
-PostgreSQL; `ArcChainService` broadcasts to Arc. `CHAIN_MODE=arc` selects the
-second, and it is opt-in and fails loudly rather than falling back.
+`POST /ingest/revenue` is the write side of the indexer (PRD §25.1),
+operator-authenticated because a borrower who could post their own revenue
+could post any number they liked. Re-posting a day replaces it rather than
+adding to it — a retried batch is the normal case for an indexer, and the
+suite asserts that posting the same day twice does not accumulate.
 
-The contracts are deployed and tested against `@rivora/core` differentially,
-but they hold no funds. A draw is a POST.
+Every window aggregate is **derived** from the posted days: eligible, growth,
+largest-payer share, HHI, unique and repeat payers. None is accepted from the
+caller.
 
-**To close it:** switch `CHAIN_MODE`, then reconcile — see item 5, which is the
-part that actually makes it trustworthy.
+**Two bugs this exposed.**
+
+`PayerSummary` is a 30-day rollup, and my first version accumulated into it
+forever — concentration would have drifted upward as days aged out of the
+window but never out of the sum. Fixed by adding a `RevenueDayPayer` grain and
+recomputing the rollup from the days inside the window, so a payer who goes
+quiet leaves it.
+
+The seed asserted a largest-payer share of 14% beside payer rows holding 43%.
+Deriving the figure exposed the contradiction: a single row was standing in for
+the long tail of ~386 customers. Modelled as a tail now, and the seed computes
+its own concentration with the same arithmetic the API uses.
 
 ---
 
-## 5. No indexer reconciling the database against chain events
+## ~~5. The credit limit could not change~~ — closed
+
+No assessment was ever written outside the seed, and no job recomputed one.
+`/credit/assessment` recomputed for display while the stored `limitAmount`
+stayed exactly where the seed left it — so the number a borrower read and the
+number they could draw against had no mechanism keeping them together.
+
+`AssessmentService` is now the only thing that may set a limit. `compute`
+decides; `reassess` decides and records. The borrower's own credit screen
+delegates to `compute`, so display and enforcement are the same computation.
+
+Triggered three ways, per PRD §16.6: on the 14-day schedule during settlement,
+on a material revenue change during ingestion (10% of eligible), and on
+operator demand. A RESTRICTED or DEFAULTED borrower keeps the limit their
+status imposed — an assessment must not hand credit back to a borrower a risk
+decision just took it from.
+
+The cadence counts **settlement days**, not wall-clock: a keeper paused for a
+month has not observed a month of revenue, and assessing as though it had would
+underwrite against data that was never settled.
+
+**A bug this exposed.** `normalizeRevenue` — PRD §13.2's time-weighted,
+median-clamped base, the control whose stated purpose is that "raw revenue is
+trivially inflated by a single spike day" — existed in `@rivora/core`, was
+tested, and was never called. The parameter named `normalizedRevenue30d` was
+being handed a raw sum. Ingesting one outsized day moved the limit exactly as
+§13.2 predicts if the clamp is skipped.
+
+Also fixed: `concentrationBand` read HHI as a fraction while everything else
+used the conventional 0–10,000 scale, so an HHI of 653 reported as HIGH.
+
+---
+
+## 6. The chain layer is a scaffold, not an integration
+
+**Where:** [apps/api/src/chain/chain.service.ts](apps/api/src/chain/chain.service.ts)
+
+An earlier version of this entry said `CHAIN_MODE=arc` "selects" the Arc
+implementation, which reads as though switching it would broadcast. It would
+not. Two things are true and neither was written down:
+
+- **`ArcChainService` throws on every method.** `fundDraw`,
+  `receiveRepayment` and `distributeRevenue` all reject with "no signer is
+  configured". It validates the contract addresses at boot and then refuses to
+  do anything, which is the correct failure mode but is not an implementation.
+- **Nothing calls `ChainService` at all.** The credit, vault and settlement
+  services write straight to Prisma. So the ledger implementation is dead code
+  too, and the transaction hashes on every screen come from
+  `LedgerService.nextTxHash` — deterministic stand-ins, not Arc.
+
+There is also no `submitAssessment` on the interface, so PRD §36 criterion 5
+("the approved limit is stored on Arc") has nothing to call even in principle.
+
+The contracts are deployed to Arc Testnet and tested differentially against
+`@rivora/core`. They hold no funds and have never been called by the API.
+
+**To close it:** decide where the signer lives — a Circle Developer-Controlled
+Wallet, an HSM, a keeper — then implement the three methods plus
+`submitAssessment`, and give the money paths call sites. Reconciliation
+(item 7) is what makes it trustworthy afterwards.
+
+Gated on PRD §42.2 item 1: whether an arbitrary contract can be a nanopayment
+settlement destination decides the custody model, and the custody model decides
+what the router is for.
+
+---
+
+## 7. No indexer reconciling the database against chain events
 
 Once money moves onchain, the database becomes a read model of the chain rather
 than the source of truth. Nothing currently performs that reconciliation, so a
@@ -123,7 +204,7 @@ so a restart resumes rather than replays. Money-movement rows already carry
 
 ---
 
-## 6. Per-payer attribution through net batch settlement
+## 8. Per-payer attribution through net batch settlement
 
 PRD §11.7 items 4–5, and PRD §42.2.
 
@@ -138,7 +219,7 @@ assumes the optimistic one.
 
 ---
 
-## 7. Declaring a default is single-signature
+## 9. Declaring a default is single-signature
 
 PRD §33 specifies an operator quorum. `POST /risk/defaults/declare` takes one
 operator's session and writes a permanent, public record that cannot be
@@ -152,7 +233,7 @@ signatures before it commits, with the signatures themselves recorded.
 
 ---
 
-## 8. Contracts are unaudited
+## 10. Contracts are unaudited
 
 `RivoraCreditVault` holds liquidity-provider funds. It has 48 passing Foundry
 tests including fuzz and differential tests against `@rivora/core`, and none of
@@ -160,7 +241,7 @@ that is a substitute for an audit.
 
 ---
 
-## 9. Two default-related screens invent the balances they reason about
+## 11. Two default-related screens invent the balances they reason about
 
 Both compute real arithmetic over literal inputs, so the output looks derived
 and is not.
@@ -191,6 +272,19 @@ justification for taking it.
   the public registry with `principal` and `recovered` per record, but not
   scoped to the caller; either filter it borrower-side or add the record to the
   borrower surface.
+
+---
+
+## 12. Revenue seasoning is not applied
+
+PRD §13.2 requires a three-day delay between settlement and eligibility, so
+refunds and reversals resolve before revenue supports credit. The constant
+`UNDERWRITING.seasoningDays` exists; nothing filters on it. Every settled day
+counts toward the base immediately.
+
+**To close it:** exclude the most recent `seasoningDays` from the window in
+`AssessmentService.compute`. Small change, but it shifts every limit, so it
+wants its own verification pass rather than being folded into another one.
 
 ---
 

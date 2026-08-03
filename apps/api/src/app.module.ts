@@ -15,6 +15,7 @@ import { RequestContextMiddleware } from './common/request-context.middleware';
 import { loadConfig } from './config/configuration';
 import { CreditModule } from './credit/credit.module';
 import { HealthModule } from './health/health.module';
+import { IngestModule } from './ingest/ingest.module';
 import { LedgerModule } from './ledger/ledger.module';
 import { PartnerModule } from './partner/partner.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -59,6 +60,7 @@ import { VaultModule } from './vault/vault.module';
     PartnerModule,
     SettlementModule,
     HealthModule,
+    IngestModule,
   ],
   providers: [
     /**

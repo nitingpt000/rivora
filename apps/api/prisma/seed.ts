@@ -180,8 +180,61 @@ const INCLUDED_PAYERS = [
   { label: 'payer-04', revenue30d: 1_080, sharePct: 8, requests30d: 27_000, firstSeenAt: new Date('2026-06-21T00:00:00.000Z') },
   { label: 'payer-05', revenue30d: 945, sharePct: 7, requests30d: 23_625, firstSeenAt: new Date('2026-06-25T00:00:00.000Z') },
   { label: 'payer-06', revenue30d: 810, sharePct: 6, requests30d: 20_250, firstSeenAt: new Date('2026-07-01T00:00:00.000Z') },
-  { label: 'payer-07', revenue30d: 5_805, sharePct: 43, requests30d: 145_125, firstSeenAt: new Date('2026-06-05T00:00:00.000Z') },
+  ...tail(),
 ];
+
+/**
+ * The long tail, as many payers rather than one bucket.
+ *
+ * These six named payers hold 57% between them; the rest of the borrower's
+ * revenue comes from a spread of smaller customers. Modelling that spread as a
+ * single 5,805 row — which is what this was — made one payer look like 43% of
+ * the book and drove the concentration factor to near zero, while the window
+ * beside it claimed a largest-payer share of 14%.
+ *
+ * Both figures are now derived from these rows, so they cannot disagree again.
+ */
+function tail() {
+  const TOTAL = 5_805;
+  const COUNT = 30;
+
+  // Gently decreasing rather than uniform: a real tail has an order.
+  const weights = Array.from({ length: COUNT }, (_, i) => COUNT - i * 0.5);
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+
+  return weights.map((weight, i) => {
+    const revenue = Math.round((TOTAL * weight * 100) / weightSum) / 100;
+    return {
+      label: `payer-${String(i + 7).padStart(2, '0')}`,
+      revenue30d: revenue,
+      sharePct: 0,
+      requests30d: Math.round(revenue / 0.04),
+      firstSeenAt: new Date(
+        `2026-06-${String(5 + (i % 20)).padStart(2, '0')}T00:00:00.000Z`,
+      ),
+    };
+  });
+}
+
+/**
+ * Concentration, computed from the payer rows rather than asserted beside them.
+ *
+ * The same arithmetic `IngestService.rebuildPayerSummaries` runs, so a seeded
+ * borrower and an ingested one describe concentration identically.
+ */
+const PAYER_STATS = (() => {
+  const total = INCLUDED_PAYERS.reduce((sum, payer) => sum + payer.revenue30d, 0);
+  let largest = 0;
+  let hhi = 0;
+
+  for (const payer of INCLUDED_PAYERS) {
+    const share = total > 0 ? (payer.revenue30d / total) * 100 : 0;
+    if (share > largest) largest = share;
+    hhi += share * share;
+  }
+
+  return { largestPayerPct: Math.round(largest * 100) / 100, hhi: Math.round(hhi) };
+})();
 
 /** Payers whose revenue was filtered out, with the reason. */
 const EXCLUDED_PAYERS = [
@@ -410,6 +463,7 @@ async function main(): Promise<void> {
 
   // Order matters — children before parents, since several relations restrict
   // or cascade on delete.
+  await prisma.revenueDayPayer.deleteMany();
   await prisma.defaultRecord.deleteMany();
   await prisma.anomaly.deleteMany();
   await prisma.revenueDay.deleteMany();
@@ -468,17 +522,18 @@ async function main(): Promise<void> {
       },
       revenueWindow: {
         create: {
-          // Derived from the series above, so the chart and the totals cannot
-          // tell different stories about the same window.
+          // Derived from the series and the payer table, so no figure here can
+          // contradict the rows it summarises. An earlier version stated a
+          // largest-payer share of 14% while the payer rows held one at 43%.
           eligible: GROSS_30D - EXCLUDED_30D,
           gross: GROSS_30D,
           excluded: EXCLUDED_30D,
           dailyMean: Math.round(((GROSS_30D - EXCLUDED_30D) / 30) * 100) / 100,
           growthPct: 35,
-          largestPayerPct: 14,
-          hhi: 900,
-          uniquePayers: 386,
-          repeatPayers: 168,
+          largestPayerPct: PAYER_STATS.largestPayerPct,
+          hhi: PAYER_STATS.hhi,
+          uniquePayers: INCLUDED_PAYERS.length,
+          repeatPayers: INCLUDED_PAYERS.length,
           windowStart: new Date('2026-07-03T00:00:00.000Z'),
           windowEnd: new Date('2026-08-01T00:00:00.000Z'),
         },
@@ -637,6 +692,7 @@ async function main(): Promise<void> {
       {
         borrowerId: borrower.id,
         at: new Date('2026-07-19T00:00:00.000Z'),
+        atDay: 30,
         score: 68,
         tier: 'Standard',
         limitAmount: 1_690,
@@ -647,6 +703,9 @@ async function main(): Promise<void> {
       {
         borrowerId: borrower.id,
         at: new Date('2026-08-02T14:00:00.000Z'),
+        // Exactly one interval behind the current settlement day, so the very
+        // next tick is due for reassessment rather than fourteen ticks away.
+        atDay: 46,
         score: 78,
         tier: 'Strong',
         limitAmount: 2_530,
@@ -727,6 +786,43 @@ async function main(): Promise<void> {
       excluded: index >= DAILY_REVENUE.length - EXCLUDED_DAYS ? EXCLUDED_PER_DAY : 0,
       requests: Math.round(settled / 0.04),
     })),
+  });
+
+  console.log('seed: writing the per-payer daily breakdown');
+  // Each payer's 30-day total spread across the days in proportion to that
+  // day's share of settled revenue. The rollup the API recomputes from these
+  // rows has to reproduce the PayerSummary written above, or a single
+  // ingestion would silently rewrite the borrower's concentration.
+  const seededDays = await prisma.revenueDay.findMany({
+    where: { borrowerId: borrower.id },
+    orderBy: { date: 'asc' },
+    select: { id: true, settled: true },
+  });
+
+  const settledTotal = seededDays.reduce((sum, day) => sum + Number(day.settled), 0);
+
+  await prisma.revenueDayPayer.createMany({
+    data: seededDays.flatMap((day) => {
+      const weight = settledTotal > 0 ? Number(day.settled) / settledTotal : 0;
+
+      return [
+        ...INCLUDED_PAYERS.map((payer) => ({
+          revenueDayId: day.id,
+          label: payer.label,
+          amount: Math.round(payer.revenue30d * weight * 1_000_000) / 1_000_000,
+          requests: Math.round(payer.requests30d * weight),
+          excluded: false,
+        })),
+        ...EXCLUDED_PAYERS.map((payer) => ({
+          revenueDayId: day.id,
+          label: payer.label,
+          amount: Math.round(payer.revenue30d * weight * 1_000_000) / 1_000_000,
+          requests: Math.round(payer.requests30d * weight),
+          excluded: true,
+          exclusionReason: payer.exclusionReason,
+        })),
+      ];
+    }),
   });
 
   console.log('seed: writing upstream dependencies');

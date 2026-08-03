@@ -340,6 +340,169 @@ check(
   200,
 );
 
+console.log('\nRevenue ingestion');
+const HANDLE = '0x9c4e…a7f1';
+
+/**
+ * A date this run has not used before.
+ *
+ * The suite runs repeatedly against the same database, so a hardcoded date is
+ * already present by the second run and "is this day new" stops meaning
+ * anything. Derived from the clock, past the seeded window so it never
+ * collides with it.
+ */
+const INGEST_DATE = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+const ingest = (body, key) =>
+  call('/ingest/revenue', {
+    method: 'POST',
+    headers: { ...opsAuth, 'idempotency-key': key },
+    body: JSON.stringify(body),
+  });
+
+const revenueBefore = (await call('/revenue', { headers: auth })).body;
+
+const posted = await ingest(
+  {
+    handle: HANDLE,
+    date: INGEST_DATE,
+    settled: 610.25,
+    requests: 15_256,
+    payers: [
+      { label: 'payer-01', amount: 90.5, requests: 2_262 },
+      { label: 'payer-02', amount: 74.0, requests: 1_850 },
+      { label: 'payer-smoke', amount: 61.0, requests: 1_525 },
+      {
+        label: 'payer-x-smoke',
+        amount: 12.5,
+        requests: 312,
+        excluded: true,
+        exclusionReason: 'Payer age below 7 days',
+      },
+    ],
+  },
+  `smoke-ingest-${Date.now()}`,
+);
+
+check('POST /ingest/revenue', posted.status, 200);
+check('exclusions are summed from the payers', posted.body.excluded, 12.5);
+
+const revenueAfter = (await call('/revenue', { headers: auth })).body;
+check('the window reflects the day', revenueAfter.gross >= revenueBefore.gross, true);
+check('the daily series lengthened or rolled', revenueAfter.dailySeries.length > 0, true);
+
+// The guarantee that matters, and the one a retrying indexer depends on:
+// posting the same day again is a no-op, not a second helping.
+const repeated = await ingest(
+  {
+    handle: HANDLE,
+    date: INGEST_DATE,
+    settled: 610.25,
+    requests: 15_256,
+    payers: [
+      { label: 'payer-01', amount: 90.5, requests: 2_262 },
+      { label: 'payer-02', amount: 74.0, requests: 1_850 },
+      { label: 'payer-smoke', amount: 61.0, requests: 1_525 },
+      {
+        label: 'payer-x-smoke',
+        amount: 12.5,
+        requests: 312,
+        excluded: true,
+        exclusionReason: 'Payer age below 7 days',
+      },
+    ],
+  },
+  `smoke-ingest-repeat-${Date.now()}`,
+);
+check('the same day posted twice reports a replacement', repeated.body.replaced, true);
+
+const revenueRepeated = (await call('/revenue', { headers: auth })).body;
+check(
+  'and does not accumulate',
+  Math.abs(revenueRepeated.gross - revenueAfter.gross) < 0.01,
+  true,
+);
+
+// Concentration is derived from the payer rows, never accepted from the caller.
+check(
+  'concentration is derived, not asserted',
+  revenueAfter.largestPayerPct > 0 && revenueAfter.hhi > 0,
+  true,
+);
+check(
+  'the band agrees with the index it describes',
+  revenueAfter.hhi < 1000 ? revenueAfter.concentrationBand === 'LOW' : true,
+  true,
+);
+
+// Re-posting the same day must replace it. A retried batch is the normal case
+// for an indexer, and adding to the day would double-count it.
+const corrected = await ingest(
+  { handle: HANDLE, date: INGEST_DATE, settled: 200, requests: 5_000 },
+  `smoke-ingest-b-${Date.now()}`,
+);
+check('re-posting a day replaces it', corrected.body.replaced, true);
+
+const revenueCorrected = (await call('/revenue', { headers: auth })).body;
+check(
+  'the correction lowered the window rather than adding to it',
+  revenueCorrected.gross < revenueAfter.gross,
+  true,
+);
+
+check(
+  'a borrower cannot post their own revenue',
+  (
+    await ingest(
+      { handle: HANDLE, date: INGEST_DATE, settled: 610.25, requests: 15_256 },
+      `smoke-ingest-c-${Date.now()}`,
+    ).then(() =>
+      call('/ingest/revenue', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ handle: HANDLE, date: INGEST_DATE, settled: 1, requests: 1 }),
+      }),
+    )
+  ).status,
+  403,
+);
+
+console.log('\nAssessment');
+const historyBefore = (await call('/credit/history', { headers: auth })).body;
+const forced = await call(`/risk/borrower/${encodeURIComponent(HANDLE)}/reassess`, {
+  method: 'POST',
+  headers: opsAuth,
+});
+check('POST /risk/borrower/:handle/reassess', forced.status, 200);
+
+const historyAfter = (await call('/credit/history', { headers: auth })).body;
+check('an assessment is recorded', historyAfter.length > historyBefore.length, true);
+check('it carries the rung that bound it', Boolean(historyAfter[0].bindingKey), true);
+
+const assessed = (await call('/credit/assessment', { headers: auth })).body;
+check(
+  'the stored limit matches what the underwriter explains',
+  Math.abs(assessed.limit - historyAfter[0].limit) < 0.01,
+  true,
+);
+check(
+  'components sum to the score',
+  Math.abs(assessed.components.reduce((a, c) => a + c.contribution, 0) - assessed.score) < 1,
+  true,
+);
+
+// A risk decision must not be undone by a routine reassessment.
+const restricted = (await call('/risk/anomaly', { headers: opsAuth })).body.borrower;
+await call(`/risk/borrower/${encodeURIComponent(restricted)}/reassess`, {
+  method: 'POST',
+  headers: opsAuth,
+});
+const stillRestricted = (
+  await call(`/risk/borrower/${encodeURIComponent(restricted)}`, { headers: opsAuth })
+).body;
+check('a restricted borrower keeps its imposed limit', stillRestricted.limit, 0);
+check('and its status', stillRestricted.status, 'RESTRICTED');
+
 console.log('\nUsage metering');
 // Baseline first: the suite has already made partner calls above, so the
 // assertions below are about the delta rather than absolute counts.
