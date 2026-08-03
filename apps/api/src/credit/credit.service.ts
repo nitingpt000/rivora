@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { applyRepayment, availableCredit, canBorrow } from '@rivora/core';
 
+import { ChainService } from '../chain/chain.service';
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerError } from '../common/ledger.error';
 import type { MutationResultDto } from '../contracts/operations.dto';
@@ -29,6 +30,7 @@ export class CreditService {
   constructor(
     private readonly snapshots: SnapshotService,
     private readonly ledger: LedgerService,
+    private readonly chain: ChainService,
   ) {}
 
   /** Credit available to draw right now. */
@@ -69,7 +71,16 @@ export class CreditService {
         );
       }
 
-      const txHash = await this.ledger.nextTxHash(tx);
+      // Broadcast after every refusal has had its chance and before any row
+      // moves: a rejected draw must never reach the chain, and a broadcast
+      // one must not be recorded differently from how it settled. In arc
+      // mode the Manager pays the operating wallet it has registered.
+      const settlement = await this.chain.fundDraw({
+        borrowerHandle: state.handle,
+        amount,
+        recipient: state.operatingWallet,
+      });
+      const txHash = settlement.txHash;
       const moved = usdc6(dec(amount));
 
       await tx.creditLine.update({
@@ -118,7 +129,13 @@ export class CreditService {
       // for, and the excess simply is not taken.
       const requested = Math.min(amount, owed);
       const applied = applyRepayment(requested, principal, interest);
-      const txHash = await this.ledger.nextTxHash(tx);
+
+      const settlement = await this.chain.receiveRepayment({
+        borrowerHandle: state.handle,
+        principal: applied.toPrincipal,
+        interest: applied.toInterest,
+      });
+      const txHash = settlement.txHash;
 
       const returned = usdc6(dec(applied.toInterest).plus(applied.toPrincipal));
 

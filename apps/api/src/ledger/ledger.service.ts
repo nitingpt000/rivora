@@ -76,8 +76,15 @@ export class LedgerService {
     });
   }
 
-  /** Runs `fn` in a transaction — every mutation is all-or-nothing. */
+  /**
+   * Runs `fn` in a transaction — every mutation is all-or-nothing.
+   *
+   * The timeout is a ceiling, not a hold: in arc mode a broadcast happens
+   * inside the money-moving transactions, and Prisma's 5-second default
+   * would abort the database write *after* the chain accepted the
+   * transaction — the exact split-brain the seam exists to prevent.
+   */
   run<T>(fn: (client: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-    return this.prisma.$transaction(fn);
+    return this.prisma.$transaction(fn, { maxWait: 10_000, timeout: 60_000 });
   }
 }

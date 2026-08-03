@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { applyRepayment, borrowerRate, dailyInterest, utilization } from '@rivora/core';
 
+import { ChainService } from '../chain/chain.service';
 import { dec, shares8, toNumber, usdc6 } from '../common/decimal';
 import type { SnapshotOnlyResultDto } from '../contracts/operations.dto';
 import { AssessmentService } from '../assessment/assessment.service';
@@ -29,6 +30,7 @@ export class SettlementService {
     private readonly snapshots: SnapshotService,
     private readonly ledger: LedgerService,
     private readonly assessments: AssessmentService,
+    private readonly chain: ChainService,
   ) {}
 
   async tick(): Promise<SnapshotOnlyResultDto> {
@@ -81,6 +83,7 @@ export class SettlementService {
       if (hadDebt) interest += accrued;
 
       let repaidPrincipal = 0;
+      let interestPaid = 0;
       let returnedToVault = 0;
       let status = credit.status;
       let completedCycles = credit.completedCycles;
@@ -92,6 +95,7 @@ export class SettlementService {
         interest = Math.max(0, interest - applied.toInterest);
         principal = Math.max(0, principal - applied.toPrincipal);
         repaidPrincipal = applied.toPrincipal;
+        interestPaid = applied.toInterest;
         returnedToVault = applied.toInterest + applied.toPrincipal;
 
         if (principal < 0.005 && hadDebt && status === 'ACTIVE') {
@@ -152,7 +156,19 @@ export class SettlementService {
         });
       }
 
-      const txHash = await this.ledger.nextTxHash(tx);
+      // A day that routed a repayment is a money movement and settles through
+      // the chain seam; a day with no debt moved nothing, and broadcasting a
+      // zero-amount repay would be a transaction that lies about itself.
+      const txHash =
+        returnedToVault > 0
+          ? (
+              await this.chain.receiveRepayment({
+                borrowerHandle: state.handle,
+                principal: repaidPrincipal,
+                interest: interestPaid,
+              })
+            ).txHash
+          : await this.ledger.nextTxHash(tx);
       await this.ledger.recordEvent(tx, {
         type: 'settlement.completed',
         who: state.handle,

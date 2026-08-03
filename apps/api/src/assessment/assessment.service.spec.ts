@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { LedgerChainService } from '../chain/chain.service';
 import type { LedgerService } from '../ledger/ledger.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AssessmentService } from './assessment.service';
@@ -57,7 +58,7 @@ function serviceWith(days: Day[]) {
   } as unknown as PrismaService;
 
   const ledger = { run: vi.fn(), nextTxHash: vi.fn() } as unknown as LedgerService;
-  return new AssessmentService(prisma, ledger);
+  return new AssessmentService(prisma, ledger, new LedgerChainService());
 }
 
 /** A steady 30-day series summing to 13,500. */
@@ -168,7 +169,7 @@ describe('AssessmentService.dueForReassessment', () => {
       },
     } as unknown as PrismaService;
 
-    return new AssessmentService(prisma, {} as LedgerService);
+    return new AssessmentService(prisma, {} as LedgerService, new LedgerChainService());
   }
 
   it('is due when the interval has elapsed in settlement days', async () => {

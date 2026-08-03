@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LedgerChainService } from '../chain/chain.service';
 import { LedgerError } from '../common/ledger.error';
 import type { LedgerService } from '../ledger/ledger.service';
 import type { SnapshotService } from '../snapshot/snapshot.service';
@@ -32,7 +33,12 @@ function build(state = makeState()) {
     recordAlert: vi.fn(async () => undefined),
   } as unknown as LedgerService;
 
-  return { service: new CreditService(snapshots, ledger), tx, snapshots, ledger };
+  return {
+    service: new CreditService(snapshots, ledger, new LedgerChainService()),
+    tx,
+    snapshots,
+    ledger,
+  };
 }
 
 describe('draw', () => {

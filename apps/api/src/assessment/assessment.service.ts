@@ -14,6 +14,7 @@ import {
   type ScoreSignals,
 } from '@rivora/core';
 
+import { ChainService } from '../chain/chain.service';
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -65,6 +66,7 @@ export class AssessmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly chain: ChainService,
   ) {}
 
   /**
@@ -202,7 +204,8 @@ export class AssessmentService {
    * a separate gate, and an assessment must not smuggle a borrower past it.
    */
   async reassess(borrowerId: string, trigger: string): Promise<AssessmentResult> {
-    return this.ledger.run(async (tx) => {
+    let handle = '';
+    const result = await this.ledger.run(async (tx) => {
       const borrower = await tx.borrower.findUnique({
         where: { id: borrowerId },
         include: { creditLine: true, revenueWindow: true, health: true },
@@ -278,8 +281,63 @@ export class AssessmentService {
         `assessed ${borrower.handle}: limit ${result.previousLimit.toFixed(2)} → ${result.limit.toFixed(2)} (${trigger})`,
       );
 
+      handle = borrower.handle;
       return result;
     });
+
+    await this.exportToRegistry(borrowerId, handle, result);
+    return result;
+  }
+
+  /**
+   * PRD §36 criterion 5 — the approved limit is stored on Arc.
+   *
+   * Runs after the database commit, and only in arc mode: offchain, the
+   * ledger row *is* the record, and exporting a stand-in would say the chain
+   * holds something it does not. A failure here is loud but not fatal — the
+   * assessment stands, the next reassessment retries the export, and the gap
+   * in between is exactly what reconciliation (backlog item 7) is for.
+   */
+  private async exportToRegistry(
+    borrowerId: string,
+    handle: string,
+    result: AssessmentResult,
+  ): Promise<void> {
+    if (this.chain.mode !== 'arc') return;
+
+    try {
+      const ref = await this.chain.submitAssessment({
+        borrowerHandle: handle,
+        score: result.score,
+        limit: result.limit,
+        tier: result.tier,
+        // The evidence bundle: what was decided and by which model. Only its
+        // hash goes onchain; the registry makes this copy tamper-evident.
+        evidence: JSON.stringify({
+          model: result.model,
+          score: result.score,
+          tier: result.tier,
+          limit: result.limit,
+          bindingKey: result.bindingKey,
+          assessedAt: result.assessedAt,
+        }),
+      });
+
+      await this.ledger.run((tx) =>
+        this.ledger.recordEvent(tx, {
+          type: 'assessment.exported',
+          who: handle,
+          amount: `${result.limit.toFixed(2)} USDC`,
+          txHash: ref.txHash,
+          note: `limit stored in the risk registry · ${result.bindingKey}`,
+          borrowerId,
+        }),
+      );
+    } catch (cause) {
+      this.logger.error(
+        `assessment for ${handle} is recorded but NOT exported to Arc: ${String(cause)}. The registry now trails the ledger; the next reassessment retries the export.`,
+      );
+    }
   }
 
   /**
