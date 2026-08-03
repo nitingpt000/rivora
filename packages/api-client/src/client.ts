@@ -3,6 +3,7 @@ import type {
   AgentPolicy,
   AmountRequest,
   AnomalyDetail,
+  ApiUsage,
   BorrowerRiskDetail,
   ApiErrorBody,
   AssessmentDetail,
@@ -17,6 +18,7 @@ import type {
   MutationResult,
   NonceResponse,
   NotificationList,
+  PartnerConsole,
   ObservationStatus,
   PolicyUpdate,
   ProtocolSnapshot,
@@ -229,6 +231,16 @@ export function createApiClient(options: ClientOptions = {}) {
         get<AnomalyDetail>(reference ? `/risk/anomaly?ref=${encodeURIComponent(reference)}` : '/risk/anomaly'),
       audit: () => get<unknown[]>('/risk/audit'),
       declareDefault: (body: Record<string, unknown>) => post<unknown>('/risk/defaults/declare', body),
+    },
+
+    // ── partner ───────────────────────────────────────────────────────────
+    partner: {
+      /** The signed-in wallet's own keys and their combined usage. */
+      console: (days?: number) =>
+        get<PartnerConsole>(days ? `/partner/console?days=${days}` : '/partner/console'),
+      /** The presenting key's own usage. For programmatic callers. */
+      usage: (days?: number) =>
+        get<ApiUsage>(days ? `/partner/usage?days=${days}` : '/partner/usage'),
     },
 
     // ── partner sandbox ───────────────────────────────────────────────────

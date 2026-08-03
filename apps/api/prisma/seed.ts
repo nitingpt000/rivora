@@ -675,6 +675,8 @@ async function main(): Promise<void> {
       keyHash: createHash('sha256').update(DEV_API_KEY).digest('hex'),
       prefix: DEV_API_KEY.slice(0, 11),
       scopes: ['score:read'],
+      // The partner wallet above, so the console can find this key.
+      ownerAddress: ROLES.find((role) => role.role === 'partner')?.address ?? null,
     },
   });
   console.log(`seed: development partner key → ${DEV_API_KEY}`);

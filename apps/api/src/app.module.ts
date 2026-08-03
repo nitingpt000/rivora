@@ -1,6 +1,6 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuditModule } from './audit/audit.module';
@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { BorrowerModule } from './borrower/borrower.module';
 import { ChainModule } from './chain/chain.module';
+import { ApiUsageInterceptor } from './common/api-usage.interceptor';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { RequestContextMiddleware } from './common/request-context.middleware';
 import { loadConfig } from './config/configuration';
@@ -74,6 +75,13 @@ import { VaultModule } from './vault/vault.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+
+    /**
+     * Usage metering runs after the guards, so it sees the key they resolved.
+     * Global for the same reason they are: a new partner endpoint is counted
+     * the day it ships rather than the day someone remembers to add it.
+     */
+    { provide: APP_INTERCEPTOR, useClass: ApiUsageInterceptor },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
   ],
 })

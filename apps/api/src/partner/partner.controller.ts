@@ -1,21 +1,23 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiSecurity,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { ApiKeyScopes } from '../auth/auth.decorators';
+import { ApiKeyScopes, CurrentApiKey, Metered } from '../auth/auth.decorators';
 import { ApiErrorDto } from '../contracts/operations.dto';
 import { PublicService } from '../public/public.service';
-import { SandboxProfileDto, SandboxScoreDto } from './partner.dto';
+import { ApiUsageDto, SandboxProfileDto, SandboxScoreDto } from './partner.dto';
 import { SandboxService } from './sandbox.service';
+import { UsageService } from './usage.service';
 
 export class PartnerScoreDto {
   @ApiProperty({ example: '0x9c4e…a7f1' })
@@ -65,7 +67,31 @@ export class PartnerController {
   constructor(
     private readonly publicService: PublicService,
     private readonly sandbox: SandboxService,
+    private readonly usageService: UsageService,
   ) {}
+
+  @Get('usage')
+  @ApiOperation({
+    summary: 'What this key has been used for',
+    description: [
+      'Scoped to the presenting key. There is no parameter that could point this at another caller.',
+      '',
+      '`billable` counts successful calls on metered routes only — sandbox calls and errors appear in `requests` but are never charged.',
+    ].join('\n'),
+  })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    example: 30,
+    description: 'Window length, 1–366 days. Defaults to 30.',
+  })
+  @ApiOkResponse({ type: ApiUsageDto })
+  usage(
+    @CurrentApiKey() key: { id: string },
+    @Query('days') days?: string,
+  ): Promise<ApiUsageDto> {
+    return this.usageService.forKey(key.id, days ? Number(days) : undefined);
+  }
 
   @Get('sandbox/profiles')
   @ApiOperation({
@@ -96,6 +122,10 @@ export class PartnerController {
   }
 
   @Get('score/:handle')
+  // The one route that counts against the plan. Everything else a partner key
+  // can reach — the sandbox, the distribution, this key's own usage — is
+  // support for the integration rather than the product being sold.
+  @Metered()
   // Lower than the global limit: partner keys are for scoring a customer at
   // decision time, not for enumerating the book.
   @Throttle({ default: { limit: 60, ttl: 60_000 } })

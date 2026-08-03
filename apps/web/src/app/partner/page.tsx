@@ -1,6 +1,6 @@
 'use client';
 
-import { pct } from '@rivora/core';
+import { num, pct } from '@rivora/core';
 import {
   BarRow,
   Button,
@@ -19,9 +19,19 @@ import {
 
 import { useProtocol } from '@rivora/protocol-sim';
 
+import { Loading } from '@/components/loading';
+
 /** S-60 — Partner console. screens.md §11.1 */
 export default function PartnerConsolePage() {
   const distribution = useProtocol((s) => s.distribution) ?? [];
+  const partnerConsole = useProtocol((s) => s.partnerConsole);
+
+  if (!partnerConsole) return <Loading label="Reading your keys and usage" />;
+
+  const { keys, usage } = partnerConsole;
+  const days = Math.round(
+    (new Date(usage.to).getTime() - new Date(usage.from).getTime()) / 86_400_000,
+  );
 
   return (
     <Page measure="mid">
@@ -71,22 +81,38 @@ export default function PartnerConsolePage() {
       </Section>
 
       <Grid cols={2} style={{ marginBottom: 14 }}>
-        <Card kicker="Usage, 30 days">
+        <Card kicker={`Usage, ${days} days`}>
           <KeyValueList>
-            <KeyValue label="Score requests" value="14,210" />
-            <KeyValue label="Unique subjects" value="1,884" />
-            <KeyValue label="Mean latency" value="212ms" />
-            <KeyValue label="Rate limit" value="200 / minute" />
-            <KeyValue label="Errors" value="0.04%" />
-            <KeyValue label="Billable" value="14,210" />
+            <KeyValue label="Requests" value={num(usage.requests, 0)} />
+            <KeyValue label="Unique subjects" value={num(usage.uniqueSubjects, 0)} />
+            <KeyValue label="Median latency" value={`${usage.medianLatencyMs}ms`} />
+            <KeyValue label="Rate limit" value="60 / minute" />
+            <KeyValue label="Errors" value={pct(usage.errorRatePct, 2)} />
+            <KeyValue label="Billable" value={num(usage.billable, 0)} strong />
           </KeyValueList>
+          <Note style={{ marginTop: 8 }}>
+            Billable counts successful score lookups only. Sandbox calls and errors are shown in
+            requests but are never charged.
+          </Note>
         </Card>
 
         <Card kicker="Keys & model versions">
           <KeyValueList>
-            <KeyValue label={<Mono>pk_live_8f2…</Mono>} value="prod · ● active" />
-            <KeyValue label={<Mono>pk_test_31a…</Mono>} value="sandbox · ● active" />
-            <KeyValue label="Scopes" value={<Mono>score:read · reputation:read</Mono>} />
+            {keys.length === 0 ? (
+              <KeyValue label="No keys issued" value="—" />
+            ) : (
+              keys.map((key) => (
+                <KeyValue
+                  key={key.prefix}
+                  label={<Mono>{key.prefix}…</Mono>}
+                  value={`${key.label} · ${key.active ? '● active' : '○ revoked'}`}
+                />
+              ))
+            )}
+            <KeyValue
+              label="Scopes"
+              value={<Mono>{[...new Set(keys.flatMap((k) => k.scopes))].join(' · ') || '—'}</Mono>}
+            />
             <KeyValue label="Pinned model" value="riv-uw-2.1 — decisions reproducible" />
             <KeyValue label="Upgrade policy" value="Manual — notify 30 d before deprecation" />
           </KeyValueList>

@@ -340,6 +340,41 @@ check(
   200,
 );
 
+console.log('\nUsage metering');
+// Baseline first: the suite has already made partner calls above, so the
+// assertions below are about the delta rather than absolute counts.
+const keyHeader = { 'x-api-key': API_KEY };
+const before = (await call('/partner/usage', { headers: keyHeader })).body;
+
+await call('/partner/score/0x9c4e%E2%80%A6a7f1', { headers: keyHeader });
+await call('/partner/sandbox/score/01', { method: 'POST', headers: keyHeader });
+await call('/partner/score/0xdefinitelynotreal', { headers: keyHeader });
+
+const after = (await call('/partner/usage', { headers: keyHeader })).body;
+
+// Four calls since the baseline: a real score, a sandbox score, a miss, and
+// the baseline read itself — which is a keyed request like any other.
+check('every keyed request is counted', after.requests - before.requests, 4);
+// Only the real score is sold. Sandbox and the 404 are support, not product.
+check('only the metered success bills', after.billable - before.billable, 1);
+check(
+  'a failed lookup is not a billed subject',
+  after.uniqueSubjects === before.uniqueSubjects,
+  true,
+);
+check('errors are visible in the rate', after.errorRatePct > 0, true);
+check('usage is bucketed by day', after.byDay.length > 0, true);
+check('a JWT cannot read partner usage', (await call('/partner/usage', { headers: auth })).status, 401);
+
+console.log('\nDevelopment sign-in guard');
+const health = (await call('/health')).body;
+check('/health states the environment', typeof health.info.environment.name, 'string');
+check(
+  '/health states whether dev sessions are allowed',
+  typeof health.info.environment.devSessions,
+  'boolean',
+);
+
 console.log('\nObservability');
 const traced = await call('/protocol/stats');
 check('x-request-id present', Boolean(traced.headers.get('x-request-id')), true);

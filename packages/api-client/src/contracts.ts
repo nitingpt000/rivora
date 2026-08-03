@@ -717,6 +717,53 @@ export interface AnomalyDetail {
   };
 }
 
+// ── partner ─────────────────────────────────────────────────────────────────
+
+export interface UsageDay {
+  /** Date, UTC. */
+  date: string;
+  requests: number;
+  billable: number;
+}
+
+/**
+ * What a partner key has been used for, over a window.
+ *
+ * Scoped to the presenting key — there is no parameter that could point it at
+ * another caller.
+ */
+export interface ApiUsage {
+  from: string;
+  to: string;
+  /** Every request the key made, including failures. */
+  requests: number;
+  /** Successful calls on metered routes. Sandbox calls and errors never bill. */
+  billable: number;
+  /** Distinct borrowers successfully scored. */
+  uniqueSubjects: number;
+  errorRatePct: number;
+  medianLatencyMs: number;
+  lastUsedAt?: string;
+  byDay: UsageDay[];
+}
+
+/** A key the caller owns. Never the key itself — only its non-secret prefix. */
+export interface ApiKeySummary {
+  label: string;
+  /** Leading characters, for recognition. */
+  prefix: string;
+  scopes: string[];
+  active: boolean;
+  createdAt: string;
+  lastUsedAt?: string;
+}
+
+/** What the partner console reads: the caller's keys and their combined usage. */
+export interface PartnerConsole {
+  keys: ApiKeySummary[];
+  usage: ApiUsage;
+}
+
 // ── partner sandbox ─────────────────────────────────────────────────────────
 
 export interface SandboxProfile {

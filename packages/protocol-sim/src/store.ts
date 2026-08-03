@@ -24,6 +24,7 @@ import type {
   NotificationList,
   ObservationRequirement,
   ObservationStatus,
+  PartnerConsole,
   PolicyDecision,
   ProtocolSnapshot,
   ProtocolStats,
@@ -87,6 +88,7 @@ export interface SimActions {
   loadPublic: () => Promise<void>;
   loadBorrower: () => Promise<void>;
   loadSandbox: () => Promise<void>;
+  loadPartner: () => Promise<void>;
   /** Loads one borrower for the operator's detail screen. */
   loadRiskBorrower: (handle: string) => Promise<void>;
   /** Loads a public reputation card. Needs no session. */
@@ -552,6 +554,16 @@ export const useProtocol = create<SimStore>()((set, get) => {
       }
     },
 
+    loadPartner: async () => {
+      if (get().user?.role !== 'partner') return;
+
+      try {
+        set({ partnerConsole: await api().partner.console() });
+      } catch (cause) {
+        set({ syncError: message(cause) });
+      }
+    },
+
     loadSandbox: async () => {
       try {
         const profiles = await api().sandbox.profiles();
@@ -617,6 +629,7 @@ export type {
   NotificationList,
   ObservationRequirement,
   ObservationStatus,
+  PartnerConsole,
   PolicyDecision,
   ProtocolStats,
   ReputationBand,

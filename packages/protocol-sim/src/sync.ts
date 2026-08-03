@@ -28,6 +28,7 @@ export function useProtocolSync(): void {
   const loadBorrower = useProtocol((s) => s.loadBorrower);
   const loadVault = useProtocol((s) => s.loadVault);
   const loadRisk = useProtocol((s) => s.loadRisk);
+  const loadPartner = useProtocol((s) => s.loadPartner);
 
   // Session first, then data — loading before the token is restored would
   // fetch the public view and then immediately refetch as authenticated.
@@ -52,7 +53,8 @@ export function useProtocolSync(): void {
     if (role === 'borrower') void loadBorrower();
     else if (role === 'lp') void loadVault();
     else if (role === 'ops') void loadRisk();
-  }, [role, token, loadBorrower, loadVault, loadRisk]);
+    else if (role === 'partner') void loadPartner();
+  }, [role, token, loadBorrower, loadVault, loadRisk, loadPartner]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;

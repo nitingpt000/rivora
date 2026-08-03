@@ -7,6 +7,7 @@ import type {
   BorrowerProfile,
   BorrowerRiskDetail,
   ObservationStatus,
+  PartnerConsole,
   RiskAlert,
   SandboxProfile,
   SandboxScore,
@@ -139,6 +140,9 @@ export interface SimState {
   anomaly: AnomalyDetail | null;
   /** A named borrower, loaded on the operator's detail screen. */
   riskBorrower: BorrowerRiskDetail | null;
+
+  /** The partner's own keys and usage. Loaded on the partner surface. */
+  partnerConsole: PartnerConsole | null;
 
   sandboxProfiles: SandboxProfile[] | null;
   sandboxResult: SandboxScore | null;
@@ -280,6 +284,7 @@ export function initialState(): SimState {
     recommendations: null,
     anomaly: null,
     riskBorrower: null,
+    partnerConsole: null,
     sandboxProfiles: null,
     sandboxResult: null,
 
