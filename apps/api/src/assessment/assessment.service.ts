@@ -9,6 +9,7 @@ import {
   qualityFactor,
   scoreComponents,
   tierForScore,
+  UNDERWRITING,
   type ScoreComponent,
   type ScoreSignals,
 } from '@rivora/core';
@@ -88,14 +89,27 @@ export class AssessmentService {
       client.revenueDay.findMany({
         where: { borrowerId: borrower.id },
         orderBy: { date: 'desc' },
-        take: WINDOW_DAYS,
+        // Enough days that dropping the unseasoned ones still fills the window.
+        take: WINDOW_DAYS + UNDERWRITING.seasoningDays,
         select: { settled: true, excluded: true },
       }),
     ]);
 
+    /**
+     * Seasoning. PRD §13.2: revenue supports credit only after a delay, so
+     * refunds and reversals resolve before the limit is derived from it.
+     *
+     * The most recent `seasoningDays` settled days are excluded from the
+     * underwriting series — they still appear on the revenue screen, because
+     * showing what settled and lending against it are different questions.
+     * Measured in settled days rather than wall-clock for the same reason the
+     * assessment cadence is: this book runs on the settlement clock.
+     */
+    const seasoned = days.slice(UNDERWRITING.seasoningDays, UNDERWRITING.seasoningDays + WINDOW_DAYS);
+
     // Oldest first, and net of exclusions: the base the limit is derived from
     // is eligible revenue, not gross.
-    const series = [...days]
+    const series = [...seasoned]
       .reverse()
       .map((row) => Math.max(0, toNumber(row.settled) - toNumber(row.excluded)));
     const reserveTarget = toNumber(credit.reserveTarget);

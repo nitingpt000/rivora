@@ -118,6 +118,38 @@ describe('AssessmentService.compute', () => {
     expect(dirty.limit).toBeLessThan(clean.limit);
   });
 
+  it('excludes unseasoned days from the base entirely', async () => {
+    // PRD §13.2: revenue supports credit only after a three-day seasoning
+    // delay, so refunds and reversals resolve first. The mock returns days
+    // newest-first, so index 0 is the day that settled most recently.
+    const freshSpike: Day[] = [
+      { settled: 50_000, excluded: 0 },
+      ...Array.from({ length: 32 }, () => ({ settled: 450, excluded: 0 })),
+    ];
+
+    const steady = await serviceWith(STEADY).compute(borrower() as never);
+    const spiked = await serviceWith(freshSpike).compute(borrower() as never);
+
+    // Not merely clamped — absent. A day that has not seasoned is not part of
+    // the underwriting base at all, however large it is.
+    expect(spiked.limit).toBe(steady.limit);
+  });
+
+  it('admits the same day once it has seasoned, clamped', async () => {
+    const seasonedSpike: Day[] = [
+      ...Array.from({ length: 3 }, () => ({ settled: 450, excluded: 0 })),
+      { settled: 50_000, excluded: 0 },
+      ...Array.from({ length: 29 }, () => ({ settled: 450, excluded: 0 })),
+    ];
+
+    const steady = await serviceWith(STEADY).compute(borrower() as never);
+    const spiked = await serviceWith(seasonedSpike).compute(borrower() as never);
+
+    // Past seasoning it counts — but through the median clamp, not raw.
+    expect(spiked.limit).toBeGreaterThanOrEqual(steady.limit);
+    expect(spiked.limit).toBeLessThanOrEqual(steady.limit * 2);
+  });
+
   it('reports the limit currently in force as the previous one', async () => {
     // Not `previousLimit` from the row — that is the assessment before last,
     // and using it would make every delta on the credit screen wrong.
