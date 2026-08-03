@@ -14,6 +14,14 @@ export interface AppConfig {
   swaggerEnabled: boolean;
   nodeEnv: string;
   isProduction: boolean;
+  /**
+   * Whether this deployment tolerates development sign-in helpers.
+   *
+   * Opt-in and never inferred. `NODE_ENV` cannot answer this — a container
+   * image is built in production mode whether it serves a laptop or the
+   * internet — so the deployment states it outright or it is off.
+   */
+  devSessionsEnabled: boolean;
   jwtSecret: string;
   jwtTtlSeconds: number;
   /** Domains accepted in the `domain` field of a SIWE message. */
@@ -99,6 +107,9 @@ export function loadConfig(): AppConfig {
     swaggerEnabled: (process.env.SWAGGER_ENABLED ?? 'true') !== 'false',
     nodeEnv,
     isProduction,
+    // Refused outright in production, so setting the variable by accident on a
+    // real deployment still cannot switch it on.
+    devSessionsEnabled: !isProduction || process.env.DEV_SESSIONS === 'true',
     jwtSecret,
     jwtTtlSeconds: Number(process.env.JWT_TTL_SECONDS ?? 3600),
     siweDomains,

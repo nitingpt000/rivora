@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckService, PrismaHealthIndicator } from '@nestjs/terminus';
 import type { HealthCheckResult } from '@nestjs/terminus';
@@ -25,6 +26,7 @@ export class HealthController {
     private readonly db: PrismaHealthIndicator,
     private readonly prisma: PrismaService,
     private readonly chain: ChainService,
+    private readonly config: ConfigService,
   ) {}
 
   @Get()
@@ -43,6 +45,20 @@ export class HealthController {
       // Always "up" — it is a statement of mode, not a liveness probe — but
       // surfacing it means nobody has to guess which one is in force.
       () => Promise.resolve({ chain: { status: 'up' as const, mode: this.chain.mode } }),
+
+      // Which environment this process believes it is. Development tooling
+      // reads it from here rather than trusting a flag its own caller set —
+      // the deployment gets to say what it is, not the script pointed at it.
+      () =>
+        Promise.resolve({
+          environment: {
+            status: 'up' as const,
+            name: this.config.get<string>('nodeEnv') ?? 'unknown',
+            // Read by the development sign-in helper, which refuses to mint a
+            // session against a deployment that does not advertise this.
+            devSessions: this.config.get<boolean>('devSessionsEnabled') === true,
+          },
+        }),
     ]);
   }
 }
