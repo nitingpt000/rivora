@@ -237,10 +237,15 @@ describe('concentration', () => {
   });
 
   it('buckets into disclosure bands', () => {
-    expect(concentrationBand(0.05)).toBe('LOW');
-    expect(concentrationBand(0.14)).toBe('MODERATE');
-    expect(concentrationBand(0.19)).toBe('ELEVATED');
-    expect(concentrationBand(0.4)).toBe('HIGH');
+    // The conventional 0–10,000 Herfindahl scale, not a fraction.
+    expect(concentrationBand(500)).toBe('LOW');
+    expect(concentrationBand(1_400)).toBe('MODERATE');
+    expect(concentrationBand(1_900)).toBe('ELEVATED');
+    expect(concentrationBand(4_000)).toBe('HIGH');
+
+    // HIGH starts where the diversity signal reaches zero, so a borrower is
+    // never labelled ELEVATED while scoring as though concentration is fatal.
+    expect(concentrationBand(UNDERWRITING.hhiCeiling)).toBe('HIGH');
   });
 });
 

@@ -227,10 +227,19 @@ export function concentrationFactor(hhiValue: number): number {
 }
 
 /** Bucketed concentration band for public and LP-facing surfaces. PRD §21.3. */
+/**
+ * Concentration band from a Herfindahl index.
+ *
+ * `hhiValue` is on the conventional 0–10,000 scale — the sum of squared
+ * percentage shares — which is what the protocol computes and stores. HIGH
+ * begins exactly where `UNDERWRITING.hhiCeiling` drives the diversity signal
+ * to zero, so the label and the score agree about when concentration has
+ * stopped being survivable.
+ */
 export function concentrationBand(hhiValue: number): 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH' {
-  if (hhiValue < 0.1) return 'LOW';
-  if (hhiValue < 0.15) return 'MODERATE';
-  if (hhiValue < 0.25) return 'ELEVATED';
+  if (hhiValue < 1_000) return 'LOW';
+  if (hhiValue < 1_500) return 'MODERATE';
+  if (hhiValue < UNDERWRITING.hhiCeiling) return 'ELEVATED';
   return 'HIGH';
 }
 
