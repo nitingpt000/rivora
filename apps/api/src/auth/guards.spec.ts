@@ -188,3 +188,47 @@ describe('RolesGuard', () => {
     );
   });
 });
+
+describe('JwtAuthGuard — a session is not a substitute for an API key', () => {
+  const scoped = { [API_KEY_SCOPES_KEY]: ['score:read'] };
+
+  /**
+   * A borrower's JWT once passed on the partner Score API, because the guard
+   * fell through to the JWT branch when no key was presented. That handed the
+   * metered product to any signed-in wallet, past the partner throttle, and
+   * without counting the call.
+   */
+  it('refuses a bearer token on a route that requires an API key', async () => {
+    const guard = new JwtAuthGuard(reflector(scoped), jwt, prismaWith(null));
+    const token = await jwt.signAsync({ sub: '0xborrower', role: 'borrower' });
+
+    await expect(
+      guard.canActivate(context({ authorization: `Bearer ${token}` })),
+    ).rejects.toMatchObject({ response: { code: 'api_key_required' } });
+  });
+
+  it('refuses a request carrying neither credential', async () => {
+    const guard = new JwtAuthGuard(reflector(scoped), jwt, prismaWith(null));
+
+    await expect(guard.canActivate(context())).rejects.toMatchObject({
+      response: { code: 'api_key_required' },
+    });
+  });
+
+  it('still accepts a valid API key on that route', async () => {
+    const key = 'pk_test_valid';
+    const guard = new JwtAuthGuard(
+      reflector(scoped),
+      jwt,
+      prismaWith({
+        id: 'k1',
+        label: 'Partner',
+        scopes: ['score:read'],
+        revokedAt: null,
+        keyHash: createHash('sha256').update(key).digest('hex'),
+      }),
+    );
+
+    await expect(guard.canActivate(context({ 'x-api-key': key }))).resolves.toBe(true);
+  });
+});

@@ -49,9 +49,28 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
 
+    /**
+     * A route declaring scopes is authenticated by key, full stop.
+     *
+     * This used to fall through to the JWT branch when no key was presented,
+     * which meant any signed-in wallet could call the partner Score API
+     * without one — taking the metered product for free, past the partner
+     * throttle, and without being counted. A session is not a substitute for
+     * a credential issued to a service.
+     *
+     * Surfaces that a person signs into with a wallet use `@Roles` on their
+     * own controller instead; the two are deliberately not interchangeable.
+     */
     if (requiredScopes?.length) {
       const key = this.header(request, 'x-api-key');
-      if (key) return this.authenticateApiKey(request, key, requiredScopes);
+      if (!key) {
+        throw new UnauthorizedException({
+          error: 'This endpoint requires an API key, sent as `x-api-key`.',
+          code: 'api_key_required',
+          statusCode: 401,
+        });
+      }
+      return this.authenticateApiKey(request, key, requiredScopes);
     }
 
     const authorization = this.header(request, 'authorization');
