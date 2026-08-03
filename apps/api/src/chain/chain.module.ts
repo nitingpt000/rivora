@@ -1,7 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { ArcChainService, ChainService, LedgerChainService } from './chain.service';
+import { ArcChainService } from './arc-chain.service';
+import { ChainService, LedgerChainService } from './chain.service';
 
 /**
  * Binds the chain seam to one implementation, chosen by configuration.

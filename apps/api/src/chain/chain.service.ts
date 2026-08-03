@@ -1,19 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 
 /**
  * The seam between the API's accounting and the chain.
  *
- * Money movement is currently a database write. It has to become a contract
- * call, and the way to get there without rewriting the services is to put the
- * boundary in first: `CreditService` and `VaultService` ask this for a
+ * `CreditService`, `SettlementService` and `AssessmentService` ask this for a
  * settlement reference, and do not know or care whether one came from Arc or
  * from a counter.
  *
  * Two implementations, chosen by configuration:
  *  - `LedgerChainService` — the default. Deterministic references, no chain.
- *  - `ArcChainService` — broadcasts real transactions. Selected when
- *    `CHAIN_MODE=arc` and the contract addresses are configured.
+ *  - `ArcChainService` — broadcasts through a Circle Developer-Controlled
+ *    Wallet. Selected when `CHAIN_MODE=arc`, and refuses to boot without the
+ *    contract addresses and Circle credentials.
  *
  * The database-backed implementation is the ledger of record until the chain
  * one is switched on, and both satisfy the same interface — so the swap is a
@@ -31,6 +29,11 @@ export interface SettlementRef {
 export interface DrawRequest {
   borrowerHandle: string;
   amount: number;
+  /**
+   * Where the borrower expects the funds. Advisory on Arc: the Manager pays
+   * the operating wallet registered onchain, and if the two disagree the
+   * registration is what wins — by design, not by accident.
+   */
   recipient: string;
 }
 
@@ -40,6 +43,22 @@ export interface RepaymentRequest {
   interest: number;
 }
 
+export interface AssessmentSubmission {
+  borrowerHandle: string;
+  /** Composite score, 0–100. The registry rejects anything above 100. */
+  score: number;
+  /** Recommended limit in USDC. */
+  limit: number;
+  /** Score band name — Prime, Strong, Standard, Restricted or Ineligible. */
+  tier: string;
+  /**
+   * The evidence bundle, canonicalised. Only its hash goes onchain; the
+   * bundle itself is the caller's to retain, and the hash is what makes a
+   * retained copy tamper-evident.
+   */
+  evidence: string;
+}
+
 export abstract class ChainService {
   /** Human-readable mode, surfaced by `/health` so it is never a guess. */
   abstract readonly mode: 'ledger' | 'arc';
@@ -47,6 +66,8 @@ export abstract class ChainService {
   abstract fundDraw(request: DrawRequest): Promise<SettlementRef>;
   abstract receiveRepayment(request: RepaymentRequest): Promise<SettlementRef>;
   abstract distributeRevenue(borrowerHandle: string): Promise<SettlementRef>;
+  /** Records a signed assessment in the onchain risk registry. */
+  abstract submitAssessment(request: AssessmentSubmission): Promise<SettlementRef>;
 }
 
 /**
@@ -94,78 +115,12 @@ export class LedgerChainService extends ChainService {
     return this.reference(`route:${borrowerHandle}`);
   }
 
+  async submitAssessment(request: AssessmentSubmission): Promise<SettlementRef> {
+    return this.reference(`assess:${request.borrowerHandle}`);
+  }
+
   private reference(seed: string): SettlementRef {
     this.seq += 1;
     return { txHash: deterministicTxHash(seed, this.seq), blockNumber: null, confirmed: true };
-  }
-}
-
-/**
- * The Arc implementation.
- *
- * Deliberately not wired to a signer yet. Broadcasting requires a key with
- * authority over protocol funds, and where that key lives — a Circle
- * Developer-Controlled Wallet, an HSM, a keeper service — is a decision that
- * has to be made before the code that uses it, not after.
- *
- * Throwing rather than silently falling back: an operator who sets
- * `CHAIN_MODE=arc` believes transactions are being broadcast, and quietly
- * writing to a database instead would be the worst possible outcome.
- */
-@Injectable()
-export class ArcChainService extends ChainService {
-  readonly mode = 'arc' as const;
-  private readonly logger = new Logger(ArcChainService.name);
-
-  constructor(config: ConfigService) {
-    super();
-
-    /**
-     * Fail at boot, not at the first draw.
-     *
-     * An operator who selects `arc` without deploying the contracts has made a
-     * configuration mistake, and the useful moment to tell them is while they
-     * are still looking at the deployment — not when a borrower's draw errors
-     * an hour later.
-     */
-    const missing = (
-      [
-        ['CREDIT_VAULT_ADDRESS', 'creditVaultAddress'],
-        ['CREDIT_MANAGER_ADDRESS', 'creditManagerAddress'],
-        ['RISK_REGISTRY_ADDRESS', 'riskRegistryAddress'],
-      ] as const
-    )
-      .filter(([, key]) => !config.get<string>(key))
-      .map(([name]) => name);
-
-    if (missing.length > 0) {
-      throw new Error(
-        `CHAIN_MODE=arc requires the deployed contract addresses. Missing: ${missing.join(', ')}. Deploy with \`pnpm --filter @rivora/contracts deploy:arc\`, or set CHAIN_MODE=ledger.`,
-      );
-    }
-
-    this.logger.warn(
-      'CHAIN_MODE=arc is selected but no signer is configured. Money movement will fail until one is.',
-    );
-  }
-
-  fundDraw(_request: DrawRequest): Promise<SettlementRef> {
-    return this.unimplemented('fundDraw');
-  }
-
-  receiveRepayment(_request: RepaymentRequest): Promise<SettlementRef> {
-    return this.unimplemented('receiveRepayment');
-  }
-
-  distributeRevenue(_borrowerHandle: string): Promise<SettlementRef> {
-    return this.unimplemented('distributeRevenue');
-  }
-
-  private unimplemented(operation: string): Promise<never> {
-    return Promise.reject(
-      new Error(
-        `${operation} cannot be broadcast: no signer is configured for Arc. Set CHAIN_MODE=ledger, or provision a signer and finish ArcChainService.`,
-      ),
-    );
   }
 }

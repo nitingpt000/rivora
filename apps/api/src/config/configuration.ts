@@ -40,6 +40,17 @@ export interface AppConfig {
   creditVaultAddress: string;
   creditManagerAddress: string;
   riskRegistryAddress: string;
+  /** RPC endpoint for reads that need no signer (nonces, confirmations). */
+  arcRpcUrl: string;
+  /**
+   * Circle Developer-Controlled Wallet credentials — the protocol signer in
+   * arc mode. All three are required there and unused in ledger mode. The
+   * entity secret is the key to the key: it never belongs in a compose file
+   * or an example, only in a gitignored .env.
+   */
+  circleApiKey: string;
+  circleEntitySecret: string;
+  circleWalletId: string;
 }
 
 const MIN_SECRET_LENGTH = 32;
@@ -122,6 +133,10 @@ export function loadConfig(): AppConfig {
     creditVaultAddress: process.env.CREDIT_VAULT_ADDRESS ?? '',
     creditManagerAddress: process.env.CREDIT_MANAGER_ADDRESS ?? '',
     riskRegistryAddress: process.env.RISK_REGISTRY_ADDRESS ?? '',
+    arcRpcUrl: process.env.ARC_RPC_URL ?? 'https://rpc.testnet.arc.io',
+    circleApiKey: process.env.CIRCLE_API_KEY ?? '',
+    circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
+    circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',
   };
 }
 
