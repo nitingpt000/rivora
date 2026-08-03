@@ -156,37 +156,50 @@ used the conventional 0–10,000 scale, so an HHI of 653 reported as HIGH.
 
 ---
 
-## 6. The chain layer is a scaffold, not an integration
+## ~~6. The chain layer is a scaffold, not an integration~~ — implemented, not yet live-fired
 
-**Where:** [apps/api/src/chain/chain.service.ts](apps/api/src/chain/chain.service.ts)
+**Where:** [apps/api/src/chain/arc-chain.service.ts](apps/api/src/chain/arc-chain.service.ts)
 
-An earlier version of this entry said `CHAIN_MODE=arc` "selects" the Arc
-implementation, which reads as though switching it would broadcast. It would
-not. Two things are true and neither was written down:
+The signer decision was made — a **Circle Developer-Controlled Wallet** — and
+the layer was built around it. The API holds an API key and an entity secret;
+Circle holds the private key; no key material ever touches the process.
 
-- **`ArcChainService` throws on every method.** `fundDraw`,
-  `receiveRepayment` and `distributeRevenue` all reject with "no signer is
-  configured". It validates the contract addresses at boot and then refuses to
-  do anything, which is the correct failure mode but is not an implementation.
-- **Nothing calls `ChainService` at all.** The credit, vault and settlement
-  services write straight to Prisma. So the ledger implementation is dead code
-  too, and the transaction hashes on every screen come from
-  `LedgerService.nextTxHash` — deterministic stand-ins, not Arc.
+What exists now, none of which did when this entry was written:
 
-There is also no `submitAssessment` on the interface, so PRD §36 criterion 5
-("the approved limit is stored on Arc") has nothing to call even in principle.
+- **The money paths call the seam.** A draw broadcasts `Manager.draw`, a
+  manual repayment and the daily settlement route broadcast `Manager.repay`,
+  and the transaction hash on the ledger row is whatever came back. In ledger
+  mode the same call sites get the deterministic stand-in — the services
+  cannot tell which implementation they have, which was the point.
+- **`submitAssessment` exists and is wired.** After a reassessment commits,
+  arc mode signs the assessment as EIP-712 typed data (the registry's exact
+  domain and typehash), reads the borrower's nonce from the chain rather than
+  counting locally, and submits. PRD §36 criterion 5 now has a call site. A
+  failure is loud but not fatal: the ledger record stands and the next
+  reassessment retries the export.
+- **Boot refuses loudly.** `CHAIN_MODE=arc` without the contract addresses
+  *and* all three Circle credentials names what is missing and stops.
+- The wire format is pinned by tests against a fake signer: calldata
+  signatures, 6-decimal integer amounts, tier indices, the borrower-id
+  derivation (`keccak256(handle)`, byte-identical to the Foundry suite's).
 
-The contracts are deployed to Arc Testnet and tested differentially against
-`@rivora/core`. They hold no funds and have never been called by the API.
+**Why "not yet live-fired."** The code has never broadcast against the real
+testnet, because the remaining steps are custody actions only the admin
+wallet can take:
 
-**To close it:** decide where the signer lives — a Circle Developer-Controlled
-Wallet, an HSM, a keeper — then implement the three methods plus
-`submitAssessment`, and give the money paths call sites. Reconciliation
-(item 7) is what makes it trustworthy afterwards.
+1. Create the wallet (`ARC-TESTNET`) and put `CIRCLE_API_KEY`,
+   `CIRCLE_ENTITY_SECRET`, `CIRCLE_WALLET_ID` in `apps/api/.env`.
+2. From the admin wallet: grant the Circle wallet `UNDERWRITER_ROLE` on the
+   registry, and register each borrower in the Manager with the Circle wallet
+   as `owner`.
+3. Fund it — native USDC for gas, ERC-20 USDC for repayments — and set
+   `CHAIN_MODE=arc`.
 
-Gated on PRD §42.2 item 1: whether an arbitrary contract can be a nanopayment
-settlement destination decides the custody model, and the custody model decides
-what the router is for.
+`distributeRevenue` still refuses, correctly: no revenue router is deployed,
+because whether nanopayment proceeds can settle into one is item 8's open
+question. Reconciliation (item 7) is what makes the rest trustworthy — until
+it exists, a transaction that lands onchain but fails to write back is only a
+log line.
 
 ---
 
