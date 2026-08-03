@@ -29,8 +29,8 @@ import { CurrentUser, RequestId, Roles } from '../auth/auth.decorators';
 import { ApiErrorDto, PaginationQueryDto } from '../contracts/operations.dto';
 import {
   AuditEntryDto,
+  DeclarationStatusDto,
   DeclareDefaultDto,
-  DefaultDeclarationResultDto,
   AnomalyDetailDto,
   BorrowerRiskDetailDto,
   ExposureReportDto,
@@ -46,9 +46,9 @@ import { RiskService } from './risk.service';
  *
  * Separately authorised from every other surface: these routes read across all
  * borrowers, which no borrower may do. PRD §33 puts operator access behind its
- * own credentials and a quorum for the destructive actions — the quorum is not
- * implemented here, and is called out in the default-declaration description
- * rather than silently skipped.
+ * own credentials and a quorum for the destructive actions. Declaring a
+ * default takes two distinct operator signatures: one proposes, another
+ * approves, and the permanent record commits only at quorum.
  */
 @ApiTags('risk')
 @ApiBearerAuth('bearer')
@@ -162,16 +162,16 @@ export class RiskController {
 
   @Post('defaults/declare')
   @ApiOperation({
-    summary: 'Declare a default',
+    summary: 'Propose a default',
     description: [
-      'Writes a permanent public record against a named borrower, sets the credit line to DEFAULTED and realises the loss against the vault.',
+      'First signature of the quorum. The declaration is created pending; a second, distinct operator commits it via `POST /risk/defaults/:id/approve`, which writes the permanent record, sets the credit line to DEFAULTED and realises the loss against the vault (PRD §19.8).',
       '',
-      'Fully audited: actor, request id, evidence hash and trigger are recorded and cannot be edited or deleted.',
+      'One pending declaration per borrower — a second proposal is refused rather than merged, because merging would attach a signature to figures the second operator never saw.',
       '',
-      '**Not yet implemented:** PRD §33 requires a 2-of-3 operator quorum for this action. Today a single `ops` session is sufficient.',
+      'Fully audited at every step: proposer, approvers, request ids, evidence hash and trigger are recorded and cannot be edited or deleted.',
     ].join('\n'),
   })
-  @ApiOkResponse({ type: DefaultDeclarationResultDto })
+  @ApiOkResponse({ type: DeclarationStatusDto })
   @ApiUnprocessableEntityResponse({
     type: ApiErrorDto,
     description: 'Declared principal exceeds the outstanding balance.',
@@ -181,8 +181,40 @@ export class RiskController {
     @Body() body: DeclareDefaultDto,
     @RequestId() requestId: string,
     @Req() request: Request,
-  ): Promise<DefaultDeclarationResultDto> {
+  ): Promise<DeclarationStatusDto> {
     return this.risk.declareDefault(user, body, { requestId, ip: request.ip });
+  }
+
+  @Post('defaults/:id/approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sign a pending declaration',
+    description: [
+      'Adds this operator’s signature. When the quorum is met the record commits atomically: the permanent default record, the DEFAULTED credit line, the realised vault loss and the audit rows land together or not at all.',
+      '',
+      'The proposer signing again is refused — two signatures must mean two people. The declared principal is re-validated at commit, because settlement repays principal daily and the balance may have moved between signatures.',
+    ].join('\n'),
+  })
+  @ApiParam({ name: 'id', example: 'clx8f2k9a0000' })
+  @ApiOkResponse({ type: DeclarationStatusDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  approveDefault(
+    @CurrentUser() user: SessionUserDto,
+    @Param('id') id: string,
+    @RequestId() requestId: string,
+    @Req() request: Request,
+  ): Promise<DeclarationStatusDto> {
+    return this.risk.approveDefault(user, id, { requestId, ip: request.ip });
+  }
+
+  @Get('defaults/pending')
+  @ApiOperation({
+    summary: 'Declarations still collecting signatures',
+    description: 'Oldest first, with who has signed each. The second operator’s worklist.',
+  })
+  @ApiOkResponse({ type: [DeclarationStatusDto] })
+  pendingDefaults(): Promise<DeclarationStatusDto[]> {
+    return this.risk.pendingDefaults();
   }
 
   @Get('audit')

@@ -91,6 +91,7 @@ model Borrower {
   allowlist     AllowlistEntry[]
   upstream      UpstreamDependency[]
   anomalies     Anomaly[]
+  declarations  DefaultDeclaration[]
 
   @@index([handle])
 }
@@ -689,4 +690,43 @@ model Anomaly {
   afterRepaymentBps    Int
 
   @@index([borrowerId, detectedAt(sort: Desc)])
+}
+
+/// A default declaration awaiting quorum. PRD §19.8 / §33.
+///
+/// A default record is permanent and public, so writing one is the most
+/// consequential thing an operator can do — and the one thing a single
+/// operator must not be able to do alone. The declaration collects distinct
+/// operator signatures and commits only when the quorum is met.
+model DefaultDeclaration {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  principal    Decimal @db.Decimal(20, 6)
+  trigger      String
+  evidenceHash String
+
+  /// `pending` until quorum; `committed` once the record is written.
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  committedAt DateTime?
+
+  approvals DefaultApproval[]
+
+  @@index([borrowerId, status])
+}
+
+/// One operator's signature on a pending declaration.
+model DefaultApproval {
+  id            String             @id @default(cuid())
+  declarationId String
+  declaration   DefaultDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+
+  /// Operator wallet, lowercased. Uniqueness per declaration is what makes
+  /// the quorum mean two people rather than one person twice.
+  operator String
+  at       DateTime @default(now())
+
+  @@unique([declarationId, operator])
 }

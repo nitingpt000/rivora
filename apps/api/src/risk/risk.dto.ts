@@ -396,7 +396,13 @@ export class DeclareDefaultDto {
   source: string;
 }
 
-export class DefaultDeclarationResultDto {
+/**
+ * A declaration and where it stands in the quorum.
+ *
+ * Returned by propose, approve and the pending list alike, so an operator
+ * reads the same shape at every step of the flow.
+ */
+export class DeclarationStatusDto {
   @ApiProperty({ example: 'clx8f2k9a0000' })
   id: string;
 
@@ -406,13 +412,32 @@ export class DefaultDeclarationResultDto {
   @ApiProperty({ example: 1850 })
   principal: number;
 
-  @ApiProperty({ format: 'date-time' })
-  declaredAt: string;
+  @ApiProperty({ example: 'coverage ratio 0.31' })
+  trigger: string;
+
+  @ApiProperty({ enum: ['pending', 'committed'] })
+  status: string;
 
   @ApiProperty({
+    type: [String],
+    example: ['0x90f7…b906'],
+    description: 'Operators who have signed. Distinct by construction.',
+  })
+  signatures: string[];
+
+  @ApiProperty({ example: 2, description: 'Signatures required to commit.' })
+  required: number;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt: string;
+
+  @ApiPropertyOptional({ format: 'date-time' })
+  committedAt?: string;
+
+  @ApiPropertyOptional({
     example: 'The record is permanent. It may be cured, but no interface path deletes it.',
   })
-  notice: string;
+  notice?: string;
 }
 
 export class AuditEntryDto {

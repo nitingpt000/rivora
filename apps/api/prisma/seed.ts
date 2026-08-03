@@ -146,7 +146,10 @@ const PEERS = [
 const ROLES = [
   { address: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8', role: 'borrower' as const, label: 'QuoteStream Labs' },
   { address: '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc', role: 'lp' as const, label: 'Liquidity provider' },
-  { address: '0x90f79bf6eb2c4f870365e785982e1f101e93b906', role: 'ops' as const, label: 'Risk operator' },
+  { address: '0x90f79bf6eb2c4f870365e785982e1f101e93b906', role: 'ops' as const, label: 'Risk operator A' },
+  // A second operator, because declaring a default requires two distinct
+  // signatures (PRD §19.8) and a quorum nobody can complete is a lockout.
+  { address: '0x976ea74026e726554db657fa54763abd0c3a0aa9', role: 'ops' as const, label: 'Risk operator B' },
   { address: '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65', role: 'partner' as const, label: 'AgentMarket Inc' },
 ];
 
@@ -464,6 +467,8 @@ async function main(): Promise<void> {
   // Order matters — children before parents, since several relations restrict
   // or cascade on delete.
   await prisma.revenueDayPayer.deleteMany();
+  await prisma.defaultApproval.deleteMany();
+  await prisma.defaultDeclaration.deleteMany();
   await prisma.defaultRecord.deleteMany();
   await prisma.anomaly.deleteMany();
   await prisma.revenueDay.deleteMany();

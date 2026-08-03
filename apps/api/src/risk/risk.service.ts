@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
   borrowerRate,
   calculateLimit,
@@ -18,10 +19,10 @@ import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   AnomalyDetailDto,
+  DeclarationStatusDto,
   BorrowerRiskDetailDto,
   LimitRecommendationDto,
   DeclareDefaultDto,
-  DefaultDeclarationResultDto,
   ExposureReportDto,
   RiskAlertDto,
   RiskParameterDto,
@@ -30,6 +31,15 @@ import type {
 
 /** Sector share above which new draws in that sector are blocked. */
 const SECTOR_CAP_PCT = 40;
+
+/**
+ * Distinct operator signatures required to commit a default. PRD §19.8 / §33.
+ *
+ * Two rather than the PRD's 2-of-3 because two operators are seeded; the
+ * threshold is what matters, and it is a constant precisely so raising it is
+ * a one-line change reviewed on its own.
+ */
+const DEFAULT_QUORUM = 2;
 
 /**
  * Read from `@rivora/core` rather than restated, so the number an operator is
@@ -561,11 +571,20 @@ export class RiskService {
    * evidence hash, because "who declared this, on what basis" has to be
    * answerable months later.
    */
+  /**
+   * Proposes a default. First signature of the quorum.
+   *
+   * Writing a default record is the most consequential thing an operator can
+   * do — permanent, public, and loss-realising — so it is the one thing a
+   * single operator must not be able to do alone (PRD §19.8). The declaration
+   * is created pending with the proposer's signature; a second, distinct
+   * operator commits it.
+   */
   async declareDefault(
     user: SessionUserDto,
     input: DeclareDefaultDto,
     context: { requestId: string; ip?: string },
-  ): Promise<DefaultDeclarationResultDto> {
+  ): Promise<DeclarationStatusDto> {
     const borrower = await this.prisma.borrower.findUnique({
       where: { handle: input.handle },
       include: { creditLine: true },
@@ -579,6 +598,13 @@ export class RiskService {
       });
     }
 
+    if (borrower.creditLine.status === 'DEFAULTED') {
+      throw new LedgerError(
+        `${input.handle} is already in default. Cure it or update the existing record.`,
+        'already_defaulted',
+      );
+    }
+
     const outstanding = toNumber(borrower.creditLine.principal);
     if (input.principal > outstanding + 1e-9) {
       throw new LedgerError(
@@ -587,72 +613,280 @@ export class RiskService {
       );
     }
 
-    return this.ledger.run(async (tx) => {
-      const record = await tx.defaultRecord.create({
+    /**
+     * One pending declaration per borrower.
+     *
+     * Deliberately NOT merged: if a second operator proposes different terms,
+     * silently adding their signature to the first declaration would commit
+     * figures they never saw. Approval has to be an explicit act against a
+     * declaration the approver has read.
+     */
+    const existing = await this.prisma.defaultDeclaration.findFirst({
+      where: { borrowerId: borrower.id, status: 'pending' },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new LedgerError(
+        `A declaration against ${input.handle} is already pending (${existing.id}). Review and approve it, do not open another.`,
+        'declaration_pending',
+        409,
+      );
+    }
+
+    const declaration = await this.ledger.run(async (tx) => {
+      const created = await tx.defaultDeclaration.create({
         data: {
           borrowerId: borrower.id,
           principal: usdc6(dec(input.principal)),
           trigger: input.trigger,
           evidenceHash: input.evidenceHash,
-          automatic: input.source === 'automatic',
+          approvals: { create: { operator: user.address.toLowerCase() } },
         },
-      });
-
-      await tx.creditLine.update({
-        where: { id: borrower.creditLine!.id },
-        data: { status: 'DEFAULTED', limitAmount: dec(0), restrictReason: 'binding' },
-      });
-
-      const vault = await tx.vaultState.findUnique({ where: { id: 'singleton' } });
-      if (vault) {
-        await tx.vaultState.update({
-          where: { id: vault.id },
-          data: {
-            realizedLosses: usdc6(dec(vault.realizedLosses).plus(dec(input.principal))),
-            onWatch: Math.max(0, vault.onWatch - 1),
-          },
-        });
-      }
-
-      const txHash = await this.ledger.nextTxHash(tx);
-      await this.ledger.recordEvent(tx, {
-        type: 'borrower.defaulted',
-        who: borrower.handle,
-        amount: `${input.principal.toFixed(2)} USDC`,
-        txHash,
-        note: input.trigger,
-        borrowerId: borrower.id,
+        include: { approvals: true },
       });
 
       await this.audit.record(
         {
           actor: user.address,
           role: 'ops',
-          action: 'risk.default.declared',
+          action: 'risk.default.proposed',
           subject: borrower.handle,
           requestId: context.requestId,
           ip: context.ip,
           metadata: {
+            declarationId: created.id,
             principal: input.principal,
             trigger: input.trigger,
             evidenceHash: input.evidenceHash,
-            source: input.source,
           },
         },
         tx,
       );
 
-      return {
-        id: record.id,
-        handle: borrower.handle,
-        principal: toNumber(record.principal),
-        declaredAt: record.declaredAt.toISOString(),
-        notice:
-          'The record is permanent. It may be cured, but no interface path deletes it.',
-      };
+      return created;
+    });
+
+    return this.declarationStatus(declaration, borrower.handle);
+  }
+
+  /**
+   * Signs a pending declaration. Commits it when the quorum is met.
+   *
+   * The proposer approving their own declaration again is rejected — the
+   * uniqueness of `(declaration, operator)` is what makes two signatures mean
+   * two people rather than one person twice.
+   */
+  async approveDefault(
+    user: SessionUserDto,
+    declarationId: string,
+    context: { requestId: string; ip?: string },
+  ): Promise<DeclarationStatusDto> {
+    return this.ledger.run(async (tx) => {
+      const declaration = await tx.defaultDeclaration.findUnique({
+        where: { id: declarationId },
+        include: {
+          approvals: true,
+          borrower: { include: { creditLine: true } },
+        },
+      });
+
+      if (!declaration) {
+        throw new NotFoundException({
+          error: `No declaration exists with the id "${declarationId}".`,
+          code: 'declaration_not_found',
+          statusCode: 404,
+        });
+      }
+
+      if (declaration.status !== 'pending') {
+        throw new LedgerError(
+          'This declaration has already been committed.',
+          'already_committed',
+          409,
+        );
+      }
+
+      const operator = user.address.toLowerCase();
+      if (declaration.approvals.some((approval) => approval.operator === operator)) {
+        throw new LedgerError(
+          'You have already signed this declaration. A second, distinct operator must approve it.',
+          'already_signed',
+          409,
+        );
+      }
+
+      const approval = await tx.defaultApproval.create({
+        data: { declarationId: declaration.id, operator },
+      });
+      const approvals = [...declaration.approvals, approval];
+
+      await this.audit.record(
+        {
+          actor: user.address,
+          role: 'ops',
+          action: 'risk.default.approved',
+          subject: declaration.borrower.handle,
+          requestId: context.requestId,
+          ip: context.ip,
+          metadata: { declarationId: declaration.id, signatures: approvals.length },
+        },
+        tx,
+      );
+
+      if (approvals.length < DEFAULT_QUORUM) {
+        return this.declarationStatus(
+          { ...declaration, approvals },
+          declaration.borrower.handle,
+        );
+      }
+
+      /**
+       * Re-validated at commit, not only at proposal: settlement repays
+       * principal daily, so the balance may have moved between the two
+       * signatures. Committing a figure larger than what is now owed would
+       * realise a loss that does not exist — the operators re-declare against
+       * the current balance instead.
+       */
+      const outstanding = toNumber(declaration.borrower.creditLine!.principal);
+      const principal = toNumber(declaration.principal);
+      if (principal > outstanding + 1e-9) {
+        throw new LedgerError(
+          `The outstanding balance has moved to ${outstanding.toFixed(2)} since this was proposed at ${principal.toFixed(2)}. Re-declare against the current balance.`,
+          'exceeds_outstanding',
+        );
+      }
+
+      await this.commitDefault(tx, declaration, user, context);
+
+      const committed = await tx.defaultDeclaration.update({
+        where: { id: declaration.id },
+        data: { status: 'committed', committedAt: new Date() },
+        include: { approvals: true },
+      });
+
+      return this.declarationStatus(committed, declaration.borrower.handle);
     });
   }
+
+  /** Declarations still collecting signatures, oldest first. */
+  async pendingDefaults(): Promise<DeclarationStatusDto[]> {
+    const rows = await this.prisma.defaultDeclaration.findMany({
+      where: { status: 'pending' },
+      orderBy: { createdAt: 'asc' },
+      include: { approvals: true, borrower: { select: { handle: true } } },
+    });
+
+    return rows.map((row) => this.declarationStatus(row, row.borrower.handle));
+  }
+
+  /**
+   * The write that everything above exists to gate.
+   *
+   * Runs inside the approval transaction, so the record, the credit-line
+   * state, the vault loss and the audit rows land together or not at all.
+   */
+  private async commitDefault(
+    tx: Prisma.TransactionClient,
+    declaration: {
+      id: string;
+      borrowerId: string;
+      principal: unknown;
+      trigger: string;
+      evidenceHash: string;
+      borrower: { handle: string; creditLine: { id: string } | null };
+    },
+    user: SessionUserDto,
+    context: { requestId: string; ip?: string },
+  ): Promise<void> {
+    const principal = toNumber(declaration.principal as never);
+
+    await tx.defaultRecord.create({
+      data: {
+        borrowerId: declaration.borrowerId,
+        principal: usdc6(dec(principal)),
+        trigger: declaration.trigger,
+        evidenceHash: declaration.evidenceHash,
+        automatic: false,
+      },
+    });
+
+    await tx.creditLine.update({
+      where: { id: declaration.borrower.creditLine!.id },
+      data: { status: 'DEFAULTED', limitAmount: dec(0), restrictReason: 'binding' },
+    });
+
+    const vault = await tx.vaultState.findUnique({ where: { id: 'singleton' } });
+    if (vault) {
+      await tx.vaultState.update({
+        where: { id: vault.id },
+        data: {
+          realizedLosses: usdc6(dec(vault.realizedLosses).plus(dec(principal))),
+          onWatch: Math.max(0, vault.onWatch - 1),
+        },
+      });
+    }
+
+    const txHash = await this.ledger.nextTxHash(tx);
+    await this.ledger.recordEvent(tx, {
+      type: 'borrower.defaulted',
+      who: declaration.borrower.handle,
+      amount: `${principal.toFixed(2)} USDC`,
+      txHash,
+      note: declaration.trigger,
+      borrowerId: declaration.borrowerId,
+    });
+
+    await this.audit.record(
+      {
+        actor: user.address,
+        role: 'ops',
+        action: 'risk.default.declared',
+        subject: declaration.borrower.handle,
+        requestId: context.requestId,
+        ip: context.ip,
+        metadata: {
+          declarationId: declaration.id,
+          principal,
+          trigger: declaration.trigger,
+          evidenceHash: declaration.evidenceHash,
+        },
+      },
+      tx,
+    );
+  }
+
+  private declarationStatus(
+    declaration: {
+      id: string;
+      principal: unknown;
+      trigger: string;
+      status: string;
+      createdAt: Date;
+      committedAt?: Date | null;
+      approvals: Array<{ operator: string }>;
+    },
+    handle: string,
+  ): DeclarationStatusDto {
+    const committed = declaration.status === 'committed';
+
+    return {
+      id: declaration.id,
+      handle,
+      principal: toNumber(declaration.principal as never),
+      trigger: declaration.trigger,
+      status: declaration.status,
+      signatures: declaration.approvals.map((approval) => approval.operator),
+      required: DEFAULT_QUORUM,
+      createdAt: declaration.createdAt.toISOString(),
+      ...(declaration.committedAt ? { committedAt: declaration.committedAt.toISOString() } : {}),
+      ...(committed
+        ? { notice: 'The record is permanent. It may be cured, but no interface path deletes it.' }
+        : {}),
+    };
+  }
 }
+
 
 /** Groups principal by key and sorts by size, largest first. */
 function groupPrincipal(

@@ -634,6 +634,22 @@ export interface LimitRecommendation {
   direction: 'raise' | 'reduce' | 'hold';
 }
 
+/** A default declaration and where it stands in the quorum. */
+export interface DeclarationStatus {
+  id: string;
+  handle: string;
+  principal: number;
+  trigger: string;
+  status: 'pending' | 'committed';
+  /** Operators who have signed. Distinct by construction. */
+  signatures: string[];
+  /** Signatures required to commit. */
+  required: number;
+  createdAt: string;
+  committedAt?: string;
+  notice?: string;
+}
+
 export interface RiskTimelineEntry {
   at: string;
   text: string;

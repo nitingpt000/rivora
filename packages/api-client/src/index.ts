@@ -32,6 +32,7 @@ export type {
   Constraint,
   CustodyExposure,
   CustodyStatus,
+  DeclarationStatus,
   DefaultRecordEntry,
   DefaultRegistry,
   DrawRequest,

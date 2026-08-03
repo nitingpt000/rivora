@@ -11,6 +11,7 @@ import type {
   AuthTokens,
   BorrowerProfile,
   CustodyStatus,
+  DeclarationStatus,
   DefaultRegistry,
   DrawRequest,
   ExposureReport,
@@ -230,7 +231,13 @@ export function createApiClient(options: ClientOptions = {}) {
       anomaly: (reference?: string) =>
         get<AnomalyDetail>(reference ? `/risk/anomaly?ref=${encodeURIComponent(reference)}` : '/risk/anomaly'),
       audit: () => get<unknown[]>('/risk/audit'),
-      declareDefault: (body: Record<string, unknown>) => post<unknown>('/risk/defaults/declare', body),
+      /** First signature of the quorum. Commits nothing by itself. */
+      declareDefault: (body: Record<string, unknown>) =>
+        post<DeclarationStatus>('/risk/defaults/declare', body),
+      /** Second signature. Commits the permanent record at quorum. */
+      approveDefault: (id: string) =>
+        post<DeclarationStatus>(`/risk/defaults/${encodeURIComponent(id)}/approve`),
+      pendingDefaults: () => get<DeclarationStatus[]>('/risk/defaults/pending'),
     },
 
     // ── partner ───────────────────────────────────────────────────────────
