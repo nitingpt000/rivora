@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 
 import { AssessmentService } from '../assessment/assessment.service';
 import { dec, toNumber, usdc6 } from '../common/decimal';
+import { attributionStats, type AttributionStats } from './attribution';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { IngestRevenueDto, IngestResultDto } from './ingest.dto';
@@ -95,10 +96,14 @@ export class IngestService {
         select: { id: true },
       });
 
+      // Replace the day's breakdown wholesale, for the same reason the day
+      // itself is replaced: a correction is a new reading, not an addition.
+      // That includes replacing it with nothing — a correction that carries
+      // no payers says the day has no attribution, and leaving the old rows
+      // under a new settled figure would attach one reading's breakdown to
+      // another reading's total.
+      await tx.revenueDayPayer.deleteMany({ where: { revenueDayId: day.id } });
       if (payers.length > 0) {
-        // Replace the day's breakdown wholesale, for the same reason the day
-        // itself is replaced: a correction is a new reading, not an addition.
-        await tx.revenueDayPayer.deleteMany({ where: { revenueDayId: day.id } });
         await tx.revenueDayPayer.createMany({
           data: payers.map((payer) => ({
             revenueDayId: day.id,
@@ -183,12 +188,8 @@ export class IngestService {
     tx: Prisma.TransactionClient,
     borrowerId: string,
     window: Array<{ id: string }>,
-  ): Promise<{
-    largestPayerPct: number;
-    hhi: number;
-    uniquePayers: number;
-    repeatPayers: number;
-  }> {
+    eligible: number,
+  ): Promise<AttributionStats> {
     const rows = await tx.revenueDayPayer.findMany({
       where: { revenueDayId: { in: window.map((day) => day.id) } },
       select: {
@@ -240,11 +241,20 @@ export class IngestService {
       }
     }
 
-    const included = [...byLabel.entries()].filter(([, payer]) => !payer.excluded);
-    const total = included.reduce((sum, [, payer]) => sum + payer.revenue, 0);
-
-    let largestPayerPct = 0;
-    let hhi = 0;
+    /**
+     * The stats are computed over eligible revenue, not merely the
+     * attributed subset — the unattributed remainder rides along as one
+     * presumed payer. See `attribution.ts` for why the presumption is
+     * concentration, not innocence.
+     */
+    const stats = attributionStats(
+      [...byLabel.values()].map((payer) => ({
+        revenue: payer.revenue,
+        daysActive: payer.days.size,
+        excluded: payer.excluded,
+      })),
+      eligible,
+    );
 
     // Rows for payers no longer in the window are removed, not left stale.
     await tx.payerSummary.deleteMany({
@@ -252,9 +262,8 @@ export class IngestService {
     });
 
     for (const [label, payer] of byLabel) {
-      const share = total > 0 && !payer.excluded ? (payer.revenue / total) * 100 : 0;
-      if (share > largestPayerPct) largestPayerPct = share;
-      hhi += share * share;
+      const share =
+        stats.shareBase > 0 && !payer.excluded ? (payer.revenue / stats.shareBase) * 100 : 0;
 
       await tx.payerSummary.upsert({
         where: { borrowerId_label: { borrowerId, label } },
@@ -278,15 +287,7 @@ export class IngestService {
       });
     }
 
-    return {
-      largestPayerPct: Math.round(largestPayerPct * 100) / 100,
-      hhi: Math.round(hhi),
-      uniquePayers: included.length,
-      // A payer that settled on more than one day in the window has come back.
-      // Counted from days rather than requests: a single batch of a thousand
-      // requests is one customer visit, not a thousand.
-      repeatPayers: included.filter(([, payer]) => payer.days.size > 1).length,
-    };
+    return stats;
   }
 
   /**
@@ -319,7 +320,7 @@ export class IngestService {
     const growthPct =
       priorGross > 0 ? Math.round(((gross - priorGross) / priorGross) * 1000) / 10 : 0;
 
-    const rollup = await this.rebuildPayerSummaries(tx, borrowerId, window);
+    const rollup = await this.rebuildPayerSummaries(tx, borrowerId, window, eligible);
 
     await tx.revenueWindow.update({
       where: { borrowerId },
@@ -335,6 +336,7 @@ export class IngestService {
         hhi: rollup.hhi,
         uniquePayers: rollup.uniquePayers,
         repeatPayers: rollup.repeatPayers,
+        attributedPct: rollup.attributedPct,
         ...(window.length > 0
           ? {
               windowStart: window[window.length - 1]!.date,

@@ -211,6 +211,10 @@ model RevenueWindow {
   hhi             Float @default(0)
   uniquePayers    Int   @default(0)
   repeatPayers    Int   @default(0)
+  /// Share of eligible revenue with a known payer behind it. Concentration
+  /// and diversity price the remainder as one presumed payer — see
+  /// src/ingest/attribution.ts.
+  attributedPct   Float @default(100)
 
   windowStart DateTime?
   windowEnd   DateTime?

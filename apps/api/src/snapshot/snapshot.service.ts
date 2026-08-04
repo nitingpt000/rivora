@@ -165,6 +165,7 @@ export class SnapshotService {
         hhi: revenue.hhi,
         uniquePayers: revenue.uniquePayers,
         repeatPayers: revenue.repeatPayers,
+        attributedPct: revenue.attributedPct,
       },
       health: {
         coverageRatio: health.coverageRatio,

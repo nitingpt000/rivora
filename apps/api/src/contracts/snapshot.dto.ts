@@ -107,6 +107,13 @@ export class RevenueMetricsDto {
 
   @ApiProperty({ example: 168 })
   repeatPayers: number;
+
+  @ApiProperty({
+    example: 100,
+    description:
+      'Share of eligible revenue with a known payer behind it. Concentration and diversity price the unattributed remainder as a single presumed payer, so a low figure here reads as concentration risk rather than as innocence.',
+  })
+  attributedPct: number;
 }
 
 export class QualityFactorsDto {

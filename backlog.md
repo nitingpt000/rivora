@@ -255,18 +255,56 @@ the fixture ledger does not record movements the chain remembers.
 
 ---
 
-## 8. Per-payer attribution through net batch settlement
+## ~~8. Per-payer attribution through net batch settlement~~ — priced; one question left for Circle
 
 PRD §11.7 items 4–5, and PRD §42.2.
 
-Circle Nanopayments settles net, in batches. If the per-authorization feed is
-not available to the payee's underwriter, the diversity (`D`) and concentration
-(`C`) factors are not computable from settlement data at all — they would have
-to be dropped from the formula and the advance rate reduced to match.
+**What the research established** (Circle Gateway/Nanopayments docs, Aug 2026):
 
-This is a question for Circle, not a coding task. It is listed here because the
-underwriting formula depends on the answer and the current implementation
-assumes the optimistic one.
+- Per-authorization visibility exists *structurally* at the sell side. In the
+  x402 flow the seller verifies each EIP-3009 authorization itself, and a
+  `TransferWithAuthorization` message carries the payer's address and their
+  signature by construction. The payee's stack sees every payer, per request,
+  with cryptographic authenticity — the optimistic assumption was not
+  baseless.
+- But that feed is **seller-side, not Circle-side**. Settlement credits the
+  seller's Gateway balance net; neither the Nanopayments docs nor the Gateway
+  API index list a seller-scoped authorization report or batch breakdown. So
+  an underwriter consuming only Circle's data cannot compute `D` and `C`, and
+  an underwriter consuming the borrower's own authorization log is trusting
+  borrower-run infrastructure — self-reported diversity, sybil-inflatable.
+
+**What the code now does about it.** The engineering flaw behind this entry
+turned out to be worse than "assumes the optimistic answer": revenue ingested
+*without* a payer breakdown raised the eligible base — and with it the limit —
+while contributing nothing to concentration. Money with no known source was
+priced as carrying no concentration risk.
+
+The presumption is now inverted
+([apps/api/src/ingest/attribution.ts](apps/api/src/ingest/attribution.ts)):
+**eligible revenue no payer row explains is priced as one presumed payer.**
+Zero attribution collapses to one payer holding 100% — HHI 10,000, `D` and
+`C` driven to zero, the advance rate reduced — exactly the degradation §42.2
+prescribes; full attribution reproduces the old numbers to the digit; partial
+degrades continuously between them. Better data buys a better limit, and only
+better data does. `attributedPct` rides on the revenue window so every
+surface can say how much of the base is actually explained. The seed now
+calls the same function rather than copying its arithmetic, and a corrected
+day that arrives without payers clears the stale breakdown instead of
+attaching one reading's payers to another reading's total.
+
+Verified live against the running stack: 100% attributed baseline → an
+unattributed day drops coverage to 96.79% and adds the presumed payer → a
+corrected re-post restores 100%.
+
+**Still open, and precisely one question for Circle:** does Gateway expose
+(or plan) a seller-scoped API listing settled authorizations — payer address,
+amount, timestamp, batch — attested by Circle, such that a third party the
+seller authorises can compute payer concentration without trusting the
+seller's own logs? Until the answer is yes, attribution-grade underwriting
+requires either Rivora operating the x402 verifier in the request path, or
+accepting borrower-attested logs at a reduced advance rate — which is what
+the formula now prices.
 
 ---
 

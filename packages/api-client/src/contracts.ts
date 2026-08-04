@@ -61,6 +61,10 @@ export interface RevenueMetrics {
   hhi: number;
   uniquePayers: number;
   repeatPayers: number;
+  /** Share of eligible revenue with a known payer behind it. The rest is
+   * priced as one presumed payer — absence of attribution is concentration
+   * risk, not innocence. */
+  attributedPct?: number;
 }
 
 export interface HealthMetrics {

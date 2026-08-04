@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { coefficientOfVariation, compositeScore, tierForScore } from '@rivora/core';
 
+import { attributionStats } from '../src/ingest/attribution';
+
 /**
  * Seeds the canonical dataset — simulated day 60, after the second assessment.
  *
@@ -205,8 +207,17 @@ function tail() {
   const weights = Array.from({ length: COUNT }, (_, i) => COUNT - i * 0.5);
   const weightSum = weights.reduce((sum, w) => sum + w, 0);
 
+  let assigned = 0;
   return weights.map((weight, i) => {
-    const revenue = Math.round((TOTAL * weight * 100) / weightSum) / 100;
+    // The last payer takes the exact remainder: rounding each row to cents
+    // independently can drift the sum a few cents off TOTAL, and under
+    // worst-case attribution a few unexplained cents would read as a
+    // phantom unattributed payer.
+    const revenue =
+      i === COUNT - 1
+        ? Math.round((TOTAL - assigned) * 100) / 100
+        : Math.round((TOTAL * weight * 100) / weightSum) / 100;
+    assigned += revenue;
     return {
       label: `payer-${String(i + 7).padStart(2, '0')}`,
       revenue30d: revenue,
@@ -218,26 +229,6 @@ function tail() {
     };
   });
 }
-
-/**
- * Concentration, computed from the payer rows rather than asserted beside them.
- *
- * The same arithmetic `IngestService.rebuildPayerSummaries` runs, so a seeded
- * borrower and an ingested one describe concentration identically.
- */
-const PAYER_STATS = (() => {
-  const total = INCLUDED_PAYERS.reduce((sum, payer) => sum + payer.revenue30d, 0);
-  let largest = 0;
-  let hhi = 0;
-
-  for (const payer of INCLUDED_PAYERS) {
-    const share = total > 0 ? (payer.revenue30d / total) * 100 : 0;
-    if (share > largest) largest = share;
-    hhi += share * share;
-  }
-
-  return { largestPayerPct: Math.round(largest * 100) / 100, hhi: Math.round(hhi) };
-})();
 
 /** Payers whose revenue was filtered out, with the reason. */
 const EXCLUDED_PAYERS = [
@@ -262,6 +253,23 @@ const EXCLUDED_PAYERS = [
 /** Trailing 30-day totals for the primary borrower, USDC. */
 const GROSS_30D = 14_040;
 const EXCLUDED_30D = 540;
+
+/**
+ * Concentration, computed from the payer rows rather than asserted beside them.
+ *
+ * Literally the function `IngestService.rebuildPayerSummaries` runs — not a
+ * copy of its arithmetic, which is how the two drifted apart once already.
+ * A fully attributed seed reports `attributedPct` 100 and identical stats to
+ * an ingested borrower with the same rows.
+ */
+const PAYER_STATS = attributionStats(
+  INCLUDED_PAYERS.map((payer) => ({
+    revenue: payer.revenue30d,
+    daysActive: 2,
+    excluded: false,
+  })),
+  GROSS_30D - EXCLUDED_30D,
+);
 
 /**
  * The shape of 30 days of settled revenue, before scaling.
@@ -537,8 +545,9 @@ async function main(): Promise<void> {
           growthPct: 35,
           largestPayerPct: PAYER_STATS.largestPayerPct,
           hhi: PAYER_STATS.hhi,
-          uniquePayers: INCLUDED_PAYERS.length,
-          repeatPayers: INCLUDED_PAYERS.length,
+          uniquePayers: PAYER_STATS.uniquePayers,
+          repeatPayers: PAYER_STATS.repeatPayers,
+          attributedPct: PAYER_STATS.attributedPct,
           windowStart: new Date('2026-07-03T00:00:00.000Z'),
           windowEnd: new Date('2026-08-01T00:00:00.000Z'),
         },
