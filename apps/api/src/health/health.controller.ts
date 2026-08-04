@@ -6,6 +6,7 @@ import type { HealthCheckResult } from '@nestjs/terminus';
 
 import { Public } from '../auth/auth.decorators';
 import { ChainService } from '../chain/chain.service';
+import { IndexerService } from '../chain/indexer.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -26,6 +27,7 @@ export class HealthController {
     private readonly db: PrismaHealthIndicator,
     private readonly prisma: PrismaService,
     private readonly chain: ChainService,
+    private readonly indexer: IndexerService,
     private readonly config: ConfigService,
   ) {}
 
@@ -44,7 +46,11 @@ export class HealthController {
       // Reports whether money movement is hitting the chain or the database.
       // Always "up" — it is a statement of mode, not a liveness probe — but
       // surfacing it means nobody has to guess which one is in force.
-      () => Promise.resolve({ chain: { status: 'up' as const, mode: this.chain.mode } }),
+      // The indexer cursor rides along so a stalled reconciler is visible
+      // from the outside: `lastBlock` far behind `latest` is the symptom.
+      async () => ({
+        chain: { status: 'up' as const, mode: this.chain.mode, sync: await this.indexer.snapshot() },
+      }),
 
       // Which environment this process believes it is. Development tooling
       // reads it from here rather than trusting a flag its own caller set —

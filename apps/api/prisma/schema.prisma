@@ -730,3 +730,37 @@ model DefaultApproval {
 
   @@unique([declarationId, operator])
 }
+
+/// The chain indexer's cursor. One row; a restart resumes from `lastBlock`
+/// rather than replaying history or silently skipping the gap.
+model ChainSync {
+  id        String   @id @default("singleton")
+  lastBlock BigInt
+  updatedAt DateTime @updatedAt
+}
+
+/// One event observed onchain — the chain's side of reconciliation.
+///
+/// In arc mode the database is a read model of the chain, and this table is
+/// how the two are compared: a money-movement log either matches a ledger
+/// row by transaction hash or it is a divergence, and a divergence is an
+/// alarm, never a silent patch.
+model ChainEvent {
+  id          String   @id @default(cuid())
+  seenAt      DateTime @default(now())
+  blockNumber BigInt
+  logIndex    Int
+  txHash      String
+  /// Emitting contract, lowercased.
+  address     String
+  name        String
+  /// Decoded arguments, bigints stringified.
+  args        Json
+  /// `matched` — a ledger row carries this hash. `unmatched` — no row does,
+  /// and an alert was raised. `recorded` — informational event, not a money
+  /// movement, stored for audit but never matched.
+  reconciled  String
+
+  @@unique([txHash, logIndex])
+  @@index([reconciled])
+}

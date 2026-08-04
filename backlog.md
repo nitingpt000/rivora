@@ -214,17 +214,44 @@ log line.
 
 ---
 
-## 7. No indexer reconciling the database against chain events
+## ~~7. No indexer reconciling the database against chain events~~ — closed
 
-Once money moves onchain, the database becomes a read model of the chain rather
-than the source of truth. Nothing currently performs that reconciliation, so a
-transaction that lands onchain but fails to write back would leave the two
-permanently disagreeing with no alarm.
+**Where:** [apps/api/src/chain/indexer.service.ts](apps/api/src/chain/indexer.service.ts)
 
-**To close it:** an event processor subscribing to `RivoraCreditVault`,
-`RivoraCreditManager` and each `RivoraRevenueRouter`, with a `ChainSync` cursor
-so a restart resumes rather than replays. Money-movement rows already carry
-`txHash` / `blockNumber` / `confirmedAt` for this.
+`IndexerService` polls the three deployed contracts' events — one `getLogs`
+per tick, because the public RPC is rate-limited and offers no subscription
+guarantees — decodes every event the contracts can emit, and records each in
+`ChainEvent`. The `ChainSync` cursor advances in the same transaction that
+records the batch, so a crash resumes exactly where it stopped; a replayed
+log is absorbed by the `(txHash, logIndex)` unique key. `/health` carries the
+cursor beside the tip, so a stalled reconciler is visible from outside.
+
+An earlier version of this entry claimed money rows "already carry
+`txHash` / `blockNumber` / `confirmedAt`". They did not — only `txHash`
+existed. Fixing that surfaced a second inaccuracy: the schema had drifted
+past the migrations (development had used `db push`), so a fresh
+deployment's `migrate deploy` would have built an incomplete database. The
+drift is now folded into migration `2_ingestion_and_quorum`, with the chain
+tables as `3_chain_indexer`.
+
+**Divergence is an alarm in both directions, never a silent patch.** A money
+event with no ledger row carrying its hash raises an ops alert; a ledger row
+whose real-looking hash never appears onchain (after a grace window, alerted
+once) raises the opposite one. Bookkeeping events — `InterestAccrued`,
+`StatusChanged`, `LimitUpdated` — are stored for audit but never judged.
+Ledger-mode stand-in hashes (the `…` ones) are excluded by shape.
+
+**Verified against the real chain, including a real divergence.** Pointed at
+the live-fire block range, the indexer recorded all six historical events and
+flagged four as unmatched — correctly, because a reseed had wiped the
+activity rows for those genuine movements. The seed erasing history the
+chain still remembers *is* the split-brain this exists to catch, and the
+first thing the reconciler ever did was catch one. A fresh assessment export
+(tx `0x396c1ce0…883d39`) then reconciled as **matched** within one tick.
+
+Worth knowing: reseeding a database in arc mode will always produce
+unmatched alarms for prior real transactions. That is the truth being told —
+the fixture ledger does not record movements the chain remembers.
 
 ---
 

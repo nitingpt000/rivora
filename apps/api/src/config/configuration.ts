@@ -43,6 +43,14 @@ export interface AppConfig {
   /** RPC endpoint for reads that need no signer (nonces, confirmations). */
   arcRpcUrl: string;
   /**
+   * First block the reconciling indexer reads on a fresh cursor. Null means
+   * start at the tip — an unbounded backfill on a rate-limited public RPC
+   * would never catch up, so history is opt-in and explicit.
+   */
+  arcIndexerFromBlock: number | null;
+  /** Milliseconds between indexing passes. */
+  arcIndexerIntervalMs: number;
+  /**
    * Circle Developer-Controlled Wallet credentials — the protocol signer in
    * arc mode. All three are required there and unused in ledger mode. The
    * entity secret is the key to the key: it never belongs in a compose file
@@ -134,6 +142,10 @@ export function loadConfig(): AppConfig {
     creditManagerAddress: process.env.CREDIT_MANAGER_ADDRESS ?? '',
     riskRegistryAddress: process.env.RISK_REGISTRY_ADDRESS ?? '',
     arcRpcUrl: process.env.ARC_RPC_URL ?? 'https://rpc.testnet.arc.io',
+    arcIndexerFromBlock: process.env.ARC_INDEXER_FROM_BLOCK
+      ? Number(process.env.ARC_INDEXER_FROM_BLOCK)
+      : null,
+    arcIndexerIntervalMs: Number(process.env.ARC_INDEXER_INTERVAL_MS ?? 15_000),
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',
