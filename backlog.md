@@ -331,11 +331,42 @@ complete is a lockout. Ten smoke checks cover the flow and its refusals.
 
 ---
 
-## 10. Contracts are unaudited
+## 10. Contracts are unaudited — still open, but no longer unreviewed
 
-`RivoraCreditVault` holds liquidity-provider funds. It has 48 passing Foundry
-tests including fuzz and differential tests against `@rivora/core`, and none of
-that is a substitute for an audit.
+`RivoraCreditVault` holds liquidity-provider funds. An external audit is the
+only thing that closes this entry, and nothing below is a substitute for one.
+
+**What was done instead, because it was worth doing anyway:** an adversarial
+internal review, and the readiness package an audit asks for on day one —
+[contracts/AUDIT.md](contracts/AUDIT.md): scope, 14 stated invariants, the
+trust model role by role, the internal findings, and the known-and-accepted
+list.
+
+**It found a critical bug in the exit queue.** `claimQueued` zeroed the
+funded counter and left the claim naming its full original amount, so a
+partially funded exit looked untouched to the next funding pass: it was
+funded again and could be claimed a second time. A liquidity provider who
+claimed a partial exit and waited for the next repayment withdrew more than
+they were owed, out of everyone else's liquidity. No special access needed —
+partial funding is the ordinary path for any exit above the buffer floor.
+`test_partialClaimCannotBePaidTwice` pays out 60,000 USDC on a 50,000 claim
+against the unfixed contract.
+
+A second finding beside it: funding read the whole balance, including money
+already promised to earlier entries and not yet withdrawn, so two providers
+could be promised the same dollars. Both are fixed, with tests. Suite is 51.
+
+**The deployed testnet instances still carry both.** They were deployed
+before the fix. Exposure is nil today — `queueLength() == 0`, no exit has
+ever queued — but the live vault must be treated as vulnerable the moment
+anyone queues one. Redeploying needs the admin wallet to re-grant
+`UNDERWRITER_ROLE` and re-register borrowers, so it is a deliberate step, not
+a background one.
+
+**What an audit should still buy:** a stateful invariant campaign (the
+invariants are written down but only unit-tested), the paths this review
+reached for and could not falsify, and everything a fresh adversary sees that
+the author cannot.
 
 ---
 
