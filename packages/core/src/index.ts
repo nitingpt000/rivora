@@ -16,3 +16,4 @@ export * from './repayment';
 export * from './vault';
 export * from './status';
 export * from './draw';
+export * from './policy';

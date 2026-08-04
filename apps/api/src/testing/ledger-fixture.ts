@@ -171,7 +171,17 @@ export interface UpdateCall {
  * answers that query with the seeded book total rather than zero — otherwise
  * utilization would read as 0% and the withdrawal planner would never queue.
  */
-export function makeTxClient(seededBook = 8_470) {
+export function makeTxClient(
+  seededBook = 8_470,
+  policy: Partial<{
+    maxPayment: number;
+    maxDaily: number;
+    spentToday: number;
+    humanApprovalThreshold: number;
+    allowedCategories: string[];
+    blockedCategories: string[];
+  }> = {},
+) {
   const updates: UpdateCall[] = [];
 
   const record = (model: string) =>
@@ -193,6 +203,25 @@ export function makeTxClient(seededBook = 8_470) {
       findMany: vi.fn(async () => []),
     },
     alert: { create: record('alert'), findMany: vi.fn(async () => []) },
+    // The agent spending policy the draw path enforces. Defaults are the
+    // schema's, so a test that says nothing about policy gets the same
+    // permissive-but-real limits a freshly registered borrower has.
+    agentPolicy: {
+      findUnique: vi.fn(async () => ({
+        id: 'policy-1',
+        borrowerId: 'borrower-1',
+        maxPayment: new Prisma.Decimal(policy.maxPayment ?? 100),
+        maxDaily: new Prisma.Decimal(policy.maxDaily ?? 500),
+        spentToday: new Prisma.Decimal(policy.spentToday ?? 0),
+        humanApprovalThreshold: new Prisma.Decimal(policy.humanApprovalThreshold ?? 250),
+        allowedCategories: policy.allowedCategories ?? [],
+        blockedCategories: policy.blockedCategories ?? [],
+        updatedAt: new Date(),
+      })),
+      create: record('agentPolicy'),
+      update: record('agentPolicy'),
+    },
+    policyDecision: { create: record('policyDecision') },
   };
 
   const find = (model: string, key: string): unknown =>

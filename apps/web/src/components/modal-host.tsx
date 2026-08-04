@@ -7,6 +7,7 @@ import {
   num,
   pct,
   planWithdrawal,
+  evaluateSpend,
   quoteDraw,
   usdc,
   withdrawalFeeRate,
@@ -68,8 +69,26 @@ function DrawDialog({ open }: { open: boolean }) {
     vaultLiquidity: s.vaultLiquidity,
     vaultAssets: s.vaultAssets,
     bindingOk: s.bindingOk,
+    // A draw is paid to the registered operating wallet, which is the
+    // destination by construction — there is nothing here for an allowlist
+    // to permit or refuse.
     destinationAllowed: true,
-    categoryAllowed: true,
+    // Previewed with the same function the server enforces with. These were
+    // hardcoded `true`, so the dialog told every borrower their category was
+    // permitted and the server never checked at all.
+    categoryAllowed:
+      !s.policy ||
+      evaluateSpend(
+        { amount: parseFloat(s.drawAmount) || 0, category: s.drawCategory, ownerAuthorised: true },
+        {
+          maxPayment: Number.POSITIVE_INFINITY,
+          maxDaily: Number.POSITIVE_INFINITY,
+          spentToday: 0,
+          humanApprovalThreshold: Number.POSITIVE_INFINITY,
+          allowedCategories: s.policy.allowedCategories,
+          blockedCategories: s.policy.blockedCategories,
+        },
+      ).outcome === 'allowed',
     humanApprovalThreshold: s.policy?.humanApprovalThreshold ?? 0,
   });
 

@@ -3,8 +3,6 @@
 import { usdc } from '@rivora/core';
 import { useProtocol, type PolicyDecision } from '@rivora/protocol-sim';
 import {
-  Button,
-  ButtonRow,
   Card,
   DataTable,
   Grid,
@@ -89,29 +87,22 @@ export default function PolicyPage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
             {policy.allowedCategories.map((c) => (
               <Tag key={c} tone="accent">
-                ✕ {c}
+                ✓ {c}
               </Tag>
             ))}
             {policy.blockedCategories.map((c) => (
               <Tag key={c} tone="outline">
-                {c}
+                ✕ {c}
               </Tag>
             ))}
           </div>
         </Card>
 
-        <Card
-          kicker="Recipient allowlist"
-          aside={
-            <Button variant="ghost" compact>
-              + Add
-            </Button>
-          }
-        >
+        <Card kicker="Recipient allowlist">
           <Stack gap={8} style={{ fontSize: 12.5, marginTop: 8 }}>
             {policy.allowlist.length === 0 ? (
               <span style={{ color: 'var(--color-neutral-600)' }}>
-                No destination registered. Every draw will be refused.
+                No recipient registered yet.
               </span>
             ) : null}
             {policy.allowlist.map((a) => (
@@ -139,7 +130,9 @@ export default function PolicyPage() {
           <Note>
             An allowlist is what makes a compromised agent&rsquo;s spending bounded rather than
             merely capped: a stolen key can spend up to the daily limit, but only to addresses the
-            owner registered.
+            owner registered. It governs payments the agent makes <em>out of</em> the operating
+            wallet — a draw is paid to that wallet itself, so the caps and categories are what
+            bound a draw, not this list.
           </Note>
         </Card>
       </Grid>
@@ -189,13 +182,16 @@ export default function PolicyPage() {
         }}
       >
         <Note style={{ margin: 0, maxWidth: '60ch' }}>
-          ⓘ Policy changes take effect after a {policy.policyChangeDelayHours}h delay while you
-          have outstanding debt. Every autonomous decision above is logged and auditable.
+          ⓘ These limits are enforced on every draw — a request above the single-payment or daily
+          cap, or in a blocked category, is refused and the refusal is recorded above. Changes take
+          effect after a {policy.policyChangeDelayHours}h delay while you have outstanding debt, so
+          a compromised agent cannot widen its own limits and immediately draw against them.
+          <br />
+          <br />
+          Editing is not yet available on this screen; the policy is changed through{' '}
+          <Mono>PATCH /policy</Mono>. This console previously carried a Save button that did
+          nothing, which is worse than none.
         </Note>
-        <ButtonRow>
-          <Button variant="ghost">Discard</Button>
-          <Button variant="primary">Save policy</Button>
-        </ButtonRow>
       </div>
     </Page>
   );

@@ -12,8 +12,11 @@ import { CreditService } from './credit.service';
  * are decided before any SQL is generated, so these run against a fake
  * transaction client rather than a live database.
  */
-function build(state = makeState()) {
-  const tx = makeTxClient();
+function build(
+  state = makeState(),
+  policy: Parameters<typeof makeTxClient>[1] = { maxPayment: 100_000, maxDaily: 100_000 },
+) {
+  const tx = makeTxClient(8_470, policy);
 
   const snapshots = {
     loadState: vi.fn(async () => state),
@@ -169,5 +172,74 @@ describe('capacity', () => {
 
   it('never reports negative capacity', () => {
     expect(CreditService.capacityOf(makeState({ principal: 3_000 }))).toBe(0);
+  });
+});
+
+/**
+ * The agent spending policy, enforced.
+ *
+ * These limits were stored, displayed and editable for the whole of the
+ * product's life while `draw` consulted none of them — the category argument
+ * reached the ledger as a log string and nothing else. A cap nobody checks is
+ * a claim, not a control.
+ */
+describe('spending policy', () => {
+  it('refuses a draw above the single-payment limit', async () => {
+    const { service, tx } = build(makeState(), { maxPayment: 100, maxDaily: 100_000 });
+
+    await expect(service.draw(400, 'Compute')).rejects.toMatchObject({
+      code: 'exceeds_max_payment',
+    });
+    // Nothing moved.
+    expect(tx.written('creditLine', 'principal')).toBeUndefined();
+  });
+
+  it('refuses a draw that would pass the daily cap', async () => {
+    const { service } = build(makeState(), {
+      maxPayment: 100_000,
+      maxDaily: 500,
+      spentToday: 450,
+    });
+
+    await expect(service.draw(100, 'Compute')).rejects.toMatchObject({
+      code: 'exceeds_daily_cap',
+    });
+  });
+
+  it('refuses a blocked category', async () => {
+    const { service } = build(makeState(), {
+      maxPayment: 100_000,
+      maxDaily: 100_000,
+      blockedCategories: ['Gambling'],
+    });
+
+    await expect(service.draw(50, 'Gambling')).rejects.toMatchObject({
+      code: 'category_blocked',
+    });
+  });
+
+  it('refuses a category outside a configured allow-list', async () => {
+    const { service } = build(makeState(), {
+      maxPayment: 100_000,
+      maxDaily: 100_000,
+      allowedCategories: ['Compute', 'Storage'],
+    });
+
+    await expect(service.draw(50, 'Marketing')).rejects.toMatchObject({
+      code: 'category_blocked',
+    });
+  });
+
+  it('records the decision and adds to the day when it allows one', async () => {
+    const { service, tx } = build(makeState(), {
+      maxPayment: 100_000,
+      maxDaily: 100_000,
+      spentToday: 120,
+    });
+
+    await service.draw(80, 'Compute');
+
+    expect(tx.raw('policyDecision', 'outcome')).toBe('allowed');
+    expect(tx.written('agentPolicy', 'spentToday')).toBe(200);
   });
 });
