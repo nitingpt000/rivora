@@ -58,8 +58,13 @@ contract RivoraCreditVault is ERC20, AccessControl, ReentrancyGuard, Pausable {
     /// FIFO exit queue. Providers claim as repayments fund it.
     struct QueueEntry {
         address owner;
+        /// Total owed to this exit, fixed at entry.
         uint256 amount;
+        /// Allocated to this entry and not yet claimed.
         uint256 funded;
+        /// Already paid out. Without this a partial claim looks unfunded and
+        /// the next repayment funds the same claim a second time.
+        uint256 paid;
         bool claimed;
     }
 
@@ -68,6 +73,10 @@ contract RivoraCreditVault is ERC20, AccessControl, ReentrancyGuard, Pausable {
     uint256 public queueTotal;
     /// Index of the next entry to fund.
     uint256 public queueHead;
+    /// Allocated to queue entries but not yet withdrawn. Sitting in the
+    /// balance, so it must be excluded from what the next funding pass
+    /// believes is free — otherwise the same dollars are promised twice.
+    uint256 public fundedUnclaimed;
 
     event Deposited(address indexed owner, uint256 assets, uint256 shares);
     event Withdrawn(
@@ -183,7 +192,9 @@ contract RivoraCreditVault is ERC20, AccessControl, ReentrancyGuard, Pausable {
 
         if (plan.queued > 0) {
             _queue.push(
-                QueueEntry({owner: msg.sender, amount: plan.queued, funded: 0, claimed: false})
+                QueueEntry({
+                    owner: msg.sender, amount: plan.queued, funded: 0, paid: 0, claimed: false
+                })
             );
             queueTotal += plan.queued;
         }
@@ -278,34 +289,48 @@ contract RivoraCreditVault is ERC20, AccessControl, ReentrancyGuard, Pausable {
      * funded by the next repayment.
      */
     function _fundQueue() private {
-        uint256 liquid = availableLiquidity();
+        // Money already promised to earlier entries is still in the balance
+        // until it is claimed. Counting it again would promise one dollar to
+        // two providers, and the second to call would find it gone.
+        uint256 balance = availableLiquidity();
+        uint256 liquid = balance > fundedUnclaimed ? balance - fundedUnclaimed : 0;
         uint256 processed;
 
         while (queueHead < _queue.length && processed < 16) {
             QueueEntry storage entry = _queue[queueHead];
+            uint256 settled = entry.paid + entry.funded;
 
-            if (entry.claimed || entry.funded >= entry.amount) {
+            if (entry.claimed || settled >= entry.amount) {
                 queueHead += 1;
                 processed += 1;
                 continue;
             }
 
-            uint256 outstanding = entry.amount - entry.funded;
+            uint256 outstanding = entry.amount - settled;
             uint256 fundable = liquid > outstanding ? outstanding : liquid;
             if (fundable == 0) break;
 
             entry.funded += fundable;
+            fundedUnclaimed += fundable;
             liquid -= fundable;
             emit QueueEntryFunded(queueHead, fundable);
 
-            if (entry.funded < entry.amount) break;
+            if (entry.paid + entry.funded < entry.amount) break;
 
             queueHead += 1;
             processed += 1;
         }
     }
 
-    /// Claims the funded portion of a queued exit.
+    /**
+     * Claims the funded portion of a queued exit.
+     *
+     * What was paid is recorded, not merely cleared. An earlier version zeroed
+     * `funded` and left `amount` naming the whole original claim, so a
+     * partially claimed entry looked untouched to the next funding pass — it
+     * was funded again and could be claimed a second time, paying one exit
+     * twice out of everybody else's liquidity.
+     */
     function claimQueued(uint256 index) external nonReentrant returns (uint256 amount) {
         QueueEntry storage entry = _queue[index];
         if (entry.owner != msg.sender) revert NotQueueOwner();
@@ -313,8 +338,11 @@ contract RivoraCreditVault is ERC20, AccessControl, ReentrancyGuard, Pausable {
         amount = entry.funded;
         if (amount == 0 || entry.claimed) revert NothingToClaim();
 
-        entry.claimed = entry.funded >= entry.amount;
+        entry.paid += amount;
         entry.funded = 0;
+        entry.claimed = entry.paid >= entry.amount;
+
+        fundedUnclaimed = fundedUnclaimed > amount ? fundedUnclaimed - amount : 0;
         queueTotal = queueTotal > amount ? queueTotal - amount : 0;
 
         asset.safeTransfer(msg.sender, amount);
