@@ -91,6 +91,7 @@ services:
       ARC_RPC_URL: ${ARC_RPC_URL:-https://rpc.testnet.arc.io}
       ARC_INDEXER_FROM_BLOCK: ${ARC_INDEXER_FROM_BLOCK:-}
       ARC_INDEXER_INTERVAL_MS: ${ARC_INDEXER_INTERVAL_MS:-15000}
+      ARC_REVENUE_ROUTERS: ${ARC_REVENUE_ROUTERS:-}
       # Circle Developer-Controlled Wallet — required only when CHAIN_MODE=arc.
       # No values belong in this file; feed them from the API's own env file:
       #   docker compose --env-file apps/api/.env up -d api

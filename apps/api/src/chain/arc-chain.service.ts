@@ -96,6 +96,8 @@ export class ArcChainService extends ChainService {
   private readonly rpcUrl: string;
   private readonly chainId: number;
   private readonly signer: ChainSigner;
+  /** Borrower handle to deployed router address. */
+  private readonly routers: Record<string, string>;
   private readonly readNonce: (borrowerId: Hex) => Promise<bigint>;
   private rpc: ReturnType<ViemModule['createPublicClient']> | null = null;
 
@@ -147,6 +149,7 @@ export class ArcChainService extends ChainService {
       );
 
     this.readNonce = readNonce ?? ((borrowerId) => this.nonceFromRegistry(borrowerId));
+    this.routers = config.get<Record<string, string>>('arcRevenueRouters') ?? {};
   }
 
   /**
@@ -179,17 +182,32 @@ export class ArcChainService extends ChainService {
   }
 
   /**
-   * Not implementable yet, and honest about why: no `RivoraRevenueRouter` is
-   * deployed, because whether nanopayment proceeds can settle into one at all
-   * is the open Circle question (backlog item 8). Revenue reaches the ledger
-   * through `POST /ingest/revenue` until that is answered.
+   * `RivoraRevenueRouter.distributeRevenue` — splits whatever the router
+   * holds into repayment, reserve and operating shares.
+   *
+   * Permissionless onchain and operating on the live balance, so it cannot be
+   * told to distribute more than arrived or to pick a favourable subset. The
+   * router address is per-borrower and comes from configuration rather than
+   * being derived: routers are deployed one at a time as borrowers onboard,
+   * and guessing an address would be worse than not having one.
+   *
+   * Still refuses loudly when no router is configured for the borrower —
+   * silently doing nothing would read as revenue having been routed.
    */
-  distributeRevenue(borrowerHandle: string): Promise<SettlementRef> {
-    return Promise.reject(
-      new Error(
-        `distributeRevenue(${borrowerHandle}) has no onchain target: no revenue router is deployed. Gated on the Gateway custody question — see backlog item 8.`,
-      ),
-    );
+  async distributeRevenue(borrowerHandle: string): Promise<SettlementRef> {
+    const router = this.routers[borrowerHandle];
+
+    if (!router) {
+      throw new Error(
+        `No revenue router is configured for "${borrowerHandle}". Deploy one with \`node scripts/circle/deploy-router.mjs ${borrowerHandle}\` and add it to ARC_REVENUE_ROUTERS.`,
+      );
+    }
+
+    return this.signer.executeContract({
+      contractAddress: router,
+      abiFunctionSignature: 'distributeRevenue()',
+      abiParameters: [],
+    });
   }
 
   /**

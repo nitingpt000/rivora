@@ -465,7 +465,49 @@ called from nowhere, so there is no estimated availability date (§22.6).
 must-include 11/14 (no x402 paid API, no AI-generated explanation, no
 router); §22.7 1/9; §22.8 0/6.
 
-Closing these is tracked as items 14–17 below.
+**What was closed, and how.** The exit fee is kept rather than destroyed.
+Detection is real: circular funding restricts, revenue collapse and
+concentration jumps freeze new draws, and the PRD §35.3 scenario now runs end
+to end — verified against a live stack, ACTIVE/2530/2000bps to
+RESTRICTED/0/3500bps with the draw refused and the anomaly written. The
+spending policy is enforced on every draw, refusals recorded in their own
+transaction so they survive the rollback they cause. Two holes closed
+alongside: a borrower could clear a risk restriction by repairing an
+unrelated endpoint, and the draw dialog told every borrower their category
+was permitted while nothing checked.
+
+**What remains: the router is deployable but not deployed** — item 14.
+
+---
+
+## 14. The Revenue Router is built and unbound
+
+Everything code-side exists: the contract, a per-borrower deployment script
+(`circle:deploy-router`), `ARC_REVENUE_ROUTERS` configuration, and
+`distributeRevenue` calling the real thing instead of refusing. It has not
+been run, because the last step needs a key that deliberately does not live
+on this machine.
+
+**A gap found while wiring it.** `registerBorrower` was the only place a
+borrower's router could ever be set, and it reverts on an existing account —
+so a router that had to be replaced, upgraded or compromised, stranded that
+borrower with the original forever. `setRevenueRouter` now rotates it under
+`RISK_ROLE`, revoking the old router's authority in the same call that grants
+the new one's; leaving it able to book repayments would mean a replaced
+router could still credit debt it no longer collects.
+
+**To finish it, in order, all needing the protocol admin:**
+
+1. Redeploy the contracts. The live ones predate both the exit-queue fix
+   (item 10, RIV-01) and `setRevenueRouter`, and neither can be patched in
+   place — there is no upgrade path by design.
+2. `pnpm --filter @rivora/contracts circle:deploy-router <handle>`, then the
+   `setRevenueRouter` call it prints.
+3. Put `ARC_REVENUE_ROUTERS=<handle>=0x…` in `apps/api/.env`.
+
+Until then repayment in arc mode is a direct `repay` call by the borrower —
+it works, but it happens *after* they hold the money rather than before, so
+the structural-repayment claim is not yet true onchain.
 
 ---
 

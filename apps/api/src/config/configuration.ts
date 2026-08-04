@@ -51,6 +51,14 @@ export interface AppConfig {
   /** Milliseconds between indexing passes. */
   arcIndexerIntervalMs: number;
   /**
+   * Deployed Revenue Routers, by borrower handle.
+   *
+   * One per borrower by construction — a router carries its borrower's id and
+   * waterfall split — so this is a map rather than a single address, and it
+   * grows as borrowers onboard rather than at deployment.
+   */
+  arcRevenueRouters: Record<string, string>;
+  /**
    * Circle Developer-Controlled Wallet credentials — the protocol signer in
    * arc mode. All three are required there and unused in ledger mode. The
    * entity secret is the key to the key: it never belongs in a compose file
@@ -146,6 +154,7 @@ export function loadConfig(): AppConfig {
       ? Number(process.env.ARC_INDEXER_FROM_BLOCK)
       : null,
     arcIndexerIntervalMs: Number(process.env.ARC_INDEXER_INTERVAL_MS ?? 15_000),
+    arcRevenueRouters: parseRouters(process.env.ARC_REVENUE_ROUTERS),
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',
@@ -177,4 +186,27 @@ function resolveJwtSecret(isProduction: boolean): string {
   }
 
   return secret;
+}
+
+/**
+ * `handle=0xaddr,handle=0xaddr`. JSON would be tidier but survives shell
+ * quoting and compose interpolation badly, and this value is pasted by hand
+ * from a deployment script's output.
+ *
+ * A malformed pair is dropped with the rest kept: one bad entry should not
+ * take the routers that parsed fine down with it.
+ */
+function parseRouters(raw: string | undefined): Record<string, string> {
+  if (!raw) return {};
+
+  const routers: Record<string, string> = {};
+  for (const pair of raw.split(',')) {
+    const at = pair.indexOf('=');
+    if (at < 1) continue;
+
+    const handle = pair.slice(0, at).trim();
+    const address = pair.slice(at + 1).trim();
+    if (handle && /^0x[0-9a-fA-F]{40}$/.test(address)) routers[handle] = address;
+  }
+  return routers;
 }

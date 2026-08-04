@@ -127,10 +127,32 @@ describe('receiveRepayment', () => {
 });
 
 describe('distributeRevenue', () => {
-  it('refuses: no revenue router is deployed', async () => {
+  const ROUTER = '0x00000000000000000000000000000000000000dd';
+
+  it('calls distributeRevenue on the router belonging to that borrower', async () => {
+    const signer = new FakeSigner();
+    const service = new ArcChainService(
+      config({ arcRevenueRouters: { quotestream: ROUTER } }),
+      signer,
+      async () => 0n,
+    );
+
+    await service.distributeRevenue('quotestream');
+
+    expect(signer.executions).toEqual([
+      {
+        contractAddress: ROUTER,
+        abiFunctionSignature: 'distributeRevenue()',
+        abiParameters: [],
+      },
+    ]);
+  });
+
+  it('refuses loudly for a borrower with no router configured', async () => {
+    // Silently doing nothing would read as revenue having been routed.
     const { service } = build();
     await expect(service.distributeRevenue('quotestream')).rejects.toThrow(
-      /no revenue router is deployed/,
+      /No revenue router is configured/,
     );
   });
 });
