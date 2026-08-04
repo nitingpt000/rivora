@@ -1,6 +1,6 @@
 'use client';
 
-import { VAULT, num, pct, usdc } from '@rivora/core';
+import { VAULT, num, pct, queueClearanceDays, usdc } from '@rivora/core';
 import { useDerived, useProtocol } from '@rivora/protocol-sim';
 import {
   BarRow,
@@ -86,13 +86,36 @@ export default function VaultPage() {
           background="var(--color-accent-100)"
           style={{ padding: '16px 22px', marginBottom: 16 }}
         >
-          <div className="kicker" style={{ marginBottom: 8 }}>
-            Withdrawal queue — position #1
-          </div>
-          <div className="tabular" style={{ fontSize: 13.5 }}>
-            Requested {usdc(s.lpQueued)} USDC · Funded so far {usdc(s.lpQueueFunded)} USDC ·{' '}
-            {pct(s.lpQueued > 0 ? (s.lpQueueFunded / s.lpQueued) * 100 : 0, 1)}
-          </div>
+          {(() => {
+            // Ahead of this exit: the rest of the queue. The database keeps
+            // one row per provider rather than ordered entries, so with
+            // several providers this overstates the wait — the direction to
+            // be wrong in. It read "position #1" as a literal string before,
+            // which was right only by accident and only for one provider.
+            const ahead = Math.max(0, s.queueTotal - s.lpQueued);
+            const days = queueClearanceDays(s.lpQueued - s.lpQueueFunded, ahead);
+
+            return (
+              <>
+                <div className="kicker" style={{ marginBottom: 8 }}>
+                  Withdrawal queue
+                  {ahead > 0 ? ` — ${usdc(ahead)} USDC ahead of you` : ' — first in line'}
+                </div>
+                <div className="tabular" style={{ fontSize: 13.5 }}>
+                  Requested {usdc(s.lpQueued)} USDC · Funded so far {usdc(s.lpQueueFunded)} USDC ·{' '}
+                  {pct(s.lpQueued > 0 ? (s.lpQueueFunded / s.lpQueued) * 100 : 0, 1)}
+                  {days === null ? null : (
+                    <>
+                      {' · '}
+                      <strong>
+                        {days === 0 ? 'fully funded' : `~${days} settlement days to clear`}
+                      </strong>
+                    </>
+                  )}
+                </div>
+              </>
+            );
+          })()}
           <Meter
             ratio={s.lpQueued > 0 ? s.lpQueueFunded / s.lpQueued : 0}
             height={9}

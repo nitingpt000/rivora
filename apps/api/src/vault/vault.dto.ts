@@ -28,6 +28,21 @@ export class VaultPortfolioDto {
   @ApiProperty({ example: 0, description: 'Part of the queued amount already funded.' })
   queueFunded: number;
 
+  @ApiProperty({
+    example: 0,
+    description:
+      'Amount owed to exits ahead of this one. The queue is strictly FIFO, so this is what has to be funded before this position is served at all.',
+  })
+  queueAhead: number;
+
+  @ApiProperty({
+    example: 4,
+    nullable: true,
+    description:
+      'Settlement days until the whole queued amount is funded, at the current funding rate. Null when nothing is queued or the rate is zero — an estimate that cannot be made is reported as absent rather than as a date.',
+  })
+  queueClearanceDays: number | null;
+
   @ApiProperty({ example: 19.85, description: 'Share of total vault assets, percent.' })
   shareOfVaultPct: number;
 }

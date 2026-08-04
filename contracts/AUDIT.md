@@ -161,12 +161,16 @@ would be absorbed silently instead of surfacing. The offchain reconciler
 
 ## 5 — Known and accepted
 
-- **Testnet deployment carries RIV-01 and RIV-02.** The instances in
-  `deployments/arc-testnet.json` were deployed before the fix. Exposure is
-  nil in practice — `queueLength() == 0`, so no exit has ever queued — but the
-  fixed code is not live. Redeploying requires the admin wallet to re-grant
-  roles and re-register borrowers; until then the live vault must be treated
-  as vulnerable if anyone queues an exit.
+- **The fixes are live.** Redeployed 2026-08-04; the addresses in
+  `deployments/arc-testnet.json` carry RIV-01 and RIV-02 fixed, and
+  `setRevenueRouter`. The superseded set is recorded in the same file under
+  `supersedes` and should be treated as abandoned — it still holds a small
+  queued position and must not be funded again.
+
+  The exit queue was exercised against the live deployment while recovering a
+  misdirected deposit: 19 USDC requested, 14 served immediately and 5 queued
+  behind the buffer floor, matching `planWithdrawal`. That is one path
+  through the fixed code, not a campaign — see the next item.
 - **No stateful invariant campaign.** Unit and differential tests only.
 - **The differential tests compare against `@rivora/core`**, the TypeScript
   the product uses. They prove the two agree, not that either is right.

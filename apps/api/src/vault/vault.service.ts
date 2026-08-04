@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { borrowerRate, dailyRepaymentCapacity, planWithdrawal, utilization } from '@rivora/core';
+import {
+  borrowerRate,
+  dailyRepaymentCapacity,
+  planWithdrawal,
+  queueClearanceDays,
+  utilization,
+} from '@rivora/core';
 
 import { dec, shares8, toNumber, usdc6 } from '../common/decimal';
 import { LedgerError } from '../common/ledger.error';
@@ -228,6 +234,18 @@ export class VaultService {
     const value = shares * sharePrice;
     const supplied = toNumber(lp.supplied);
     const assets = toNumber(vault.totalAssets);
+    const queued = toNumber(lp.queued);
+
+    /**
+     * What is owed to exits ahead of this one.
+     *
+     * The database models the queue as one row per provider rather than as
+     * ordered entries — the Solidity keeps a real FIFO array, this does not
+     * — so "ahead" is the rest of the queue rather than a true position.
+     * With a single provider it is exact; with several it overstates the
+     * wait, which is the direction to be wrong in.
+     */
+    const ahead = Math.max(0, toNumber(vault.queueTotal) - queued);
 
     return {
       address: lp.address,
@@ -239,8 +257,19 @@ export class VaultService {
       // than floored at zero: a vault that cannot show a loss is not a vault.
       earned: value - supplied,
       walletBalance: toNumber(lp.walletBalance),
-      queued: toNumber(lp.queued),
+      queued,
       queueFunded: toNumber(lp.queueFunded),
+      queueAhead: ahead,
+      /**
+       * The estimate, from the function that already existed to make it.
+       *
+       * `queueClearanceDays` has been in `@rivora/core` since the vault was
+       * written and was called from nowhere; the LP surface said "position
+       * #1" as a literal string and gave no date at all. An estimate that
+       * cannot be made — nothing queued, or a funding rate of zero — comes
+       * back null rather than as a reassuring number.
+       */
+      queueClearanceDays: queueClearanceDays(queued, ahead),
       shareOfVaultPct: assets > 0 ? Math.round((value / assets) * 1000) / 10 : 0,
     };
   }

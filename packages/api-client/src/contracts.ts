@@ -533,6 +533,11 @@ export interface VaultPortfolio {
   walletBalance: number;
   queued: number;
   queueFunded: number;
+  /** Owed to exits ahead of this one; the queue is strictly FIFO. */
+  queueAhead?: number;
+  /** Settlement days until the queued amount is funded. Null when it cannot
+   * be estimated — reported as absent rather than as a reassuring date. */
+  queueClearanceDays?: number | null;
   shareOfVaultPct: number;
 }
 

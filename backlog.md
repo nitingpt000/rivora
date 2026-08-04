@@ -449,17 +449,37 @@ sets a local boolean; `routerAddress` is written by no code outside the seed.
 §36 criteria 9 and 11 fail, and the thesis — repayment taken *before* the
 money reaches the borrower — is currently repayment after, by direct call.
 
-**Endpoint verification returns `verified: true` unconditionally.** No DNS,
-no TLS, no 402 fetch, no nonce comparison. And `restoreBinding` lets a
-borrower clear their own binding restriction and restore their limit with no
-probe having run.
+~~**Endpoint verification returns `verified: true` unconditionally.**~~ —
+closed. The probe
+([apps/api/src/borrower/endpoint-probe.ts](apps/api/src/borrower/endpoint-probe.ts))
+now makes a real request: resolves the host, requires HTTPS, expects a 402,
+reads `payTo` out of the challenge and compares it against the deployed
+router. The result is written to `bindingOk`, so a diverted `payTo`
+restricts the borrower rather than producing a log nobody reads.
+
+Making it real made it an SSRF surface — the URL is chosen by the borrower,
+so the API is being asked to fetch an address from outside itself. Loopback,
+link-local and every private range are refused *before* the request leaves,
+redirects are not followed, and the whole thing runs under a 5s timeout.
+`https://169.254.169.254/` is cloud metadata: without that check the probe
+is a credential exfiltration tool a borrower aims by registering a URL.
+Twelve tests, most of them refusals.
+
+The self-clear half was closed earlier: `restoreBinding` now refuses
+anything but a binding restriction.
 
 **Two confirmed bugs.** The withdrawal fee is destroyed rather than retained:
 the provider is paid `immediate - fee` while `totalAssets` falls by the full
 `immediate`, so the fee accrues to nobody — contradicting both the UI copy
-and `RivoraCreditVault.sol`, which keeps it. And the LP queue position is the
-literal string `#1`; `queueClearanceDays()` exists in `@rivora/core` and is
-called from nowhere, so there is no estimated availability date (§22.6).
+and `RivoraCreditVault.sol`, which keeps it. ~~And the LP queue position is
+the literal string `#1`~~ — closed: the exit panel reports what is actually
+ahead of the position and an estimated clearance in settlement days, from
+the `queueClearanceDays` that had sat unused in `@rivora/core` since the
+vault was written. With several providers it overstates the wait, because
+the database models the queue as one row per provider rather than as ordered
+entries — the Solidity keeps a real FIFO array and this does not.
+Overstating is the direction to be wrong in, and the panel says so rather
+than presenting the estimate as exact.
 
 **Scorecard at audit time:** §36 acceptance criteria 11/15; §35.4
 must-include 11/14 (no x402 paid API, no AI-generated explanation, no

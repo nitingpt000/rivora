@@ -474,7 +474,7 @@ function WithdrawDialog({ open }: { open: boolean }) {
         >
           {receipt.queued ? (
             <div style={{ fontSize: 13.5 }}>
-              ⏱ {usdc(receipt.queued)} USDC entered the FIFO queue at position #1. Track it on the
+              ⏱ {usdc(receipt.queued)} USDC entered the FIFO queue. Track it on the
               vault dashboard.
             </div>
           ) : null}

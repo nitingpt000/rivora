@@ -7,6 +7,7 @@ import { LedgerError } from '../common/ledger.error';
 import type { SessionUserDto } from '../auth/auth.dto';
 import { AssessmentService } from '../assessment/assessment.service';
 import { LedgerService } from '../ledger/ledger.service';
+import { probeEndpoint } from './endpoint-probe';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   AgentPolicyDto,
@@ -674,39 +675,41 @@ export class BorrowerService {
    * the product: a borrower has to be able to see *which* check failed, not
    * just that verification did.
    *
-   * Currently reports against stored state rather than making a live outbound
-   * request — the network probe is the piece that needs egress rules and a
-   * timeout budget before it can run in production.
+   * Makes a real outbound request. It used to return `verified: true`
+   * unconditionally beside a hardcoded log describing checks that never ran,
+   * which gated credit on a claim while reading like evidence.
+   *
+   * The result is written to `ServiceHealth.bindingOk`, so a probe that finds
+   * a diverted `payTo` restricts the borrower on the spot rather than waiting
+   * for someone to read the log.
    */
   async verifyEndpoint(user: SessionUserDto, endpoint: string): Promise<EndpointVerificationDto> {
     const borrower = await this.forSession(user);
-    const bound = Boolean(borrower.routerAddress);
-    const host = safeHost(endpoint);
+    const result = await probeEndpoint(endpoint, borrower.routerAddress);
 
-    const log = [
-      { text: `Resolving ${host}`, mark: '✓' },
-      { text: 'TLS certificate valid', mark: '✓' },
-      { text: 'GET /.well-known/rivora-challenge — nonce matched', mark: '✓' },
-      { text: 'GET (unpaid) → 402 Payment Required', mark: '✓' },
-      { text: 'scheme x402/nanopayment · asset USDC · Arc', mark: '' },
-      {
-        text: bound
-          ? `payTo ${borrower.routerAddress} — matches deployed router`
-          : 'payTo not yet bound',
-        mark: bound ? '✓' : '⚠',
-      },
-      {
-        text: bound
-          ? `Binding hash written onchain ${borrower.endpointHash ?? '—'}`
-          : 'Endpoint ownership verified — router binding pending',
-        mark: '✓',
-      },
-    ];
+    await this.ledger.run(async (tx) => {
+      await tx.serviceHealth.update({
+        where: { id: borrower.health!.id },
+        data: { bindingOk: result.verified, endpointUp: result.payTo !== null },
+      });
+
+      // Only when it changes: a probe run twice should not produce two
+      // identical alerts, and a borrower whose binding is fine does not need
+      // telling every time they check.
+      if (borrower.health!.bindingOk !== result.verified) {
+        await this.ledger.recordAlert(tx, {
+          icon: result.verified ? '✓' : '⚠',
+          title: result.verified ? 'Endpoint binding verified' : 'Endpoint binding broken',
+          body: result.log[result.log.length - 1]?.text,
+          borrowerId: borrower.id,
+        });
+      }
+    });
 
     return {
-      verified: true,
-      bindingOk: bound,
-      log,
+      verified: result.verified,
+      bindingOk: result.verified,
+      log: result.log,
       ...(borrower.endpointHash ? { endpointHash: borrower.endpointHash } : {}),
     };
   }
@@ -770,13 +773,5 @@ function requirement(label: string, value: number, threshold: number, progress: 
 }
 
 /** Host of a URL, or the raw string if it will not parse. */
-function safeHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
 /** Re-exported so the controller can throw the same shape. */
 export { NotFoundException };
