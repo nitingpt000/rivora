@@ -407,6 +407,68 @@ and lending against it are different questions.
 
 ---
 
+## 13. A PRD audit found working screens over logic that was never built
+
+Every entry above item 12 was something I noticed while building. This one
+came from auditing [PRD.md](PRD.md) section by section against the code, and
+it found more than the backlog knew about. The distinction matters: "the
+backlog is clear" only ever meant "clear of what I had already noticed."
+
+The money spine is real — ingestion, underwriting, draw, repay, settlement,
+the vault, the contracts live-fired on Arc. What follows is the part that
+renders convincingly and does nothing.
+
+**Risk monitoring (§22.7) — one of nine requirements has a detect-and-act
+loop.** Periodic reassessment works. Nothing else does: no detector for
+revenue decline, failure-rate increase, concentration *change*, or suspicious
+payer patterns. The `Anomaly` table is written in exactly one place, and it
+is `seed.ts`. No runtime path can set `RESTRICTED` or `WATCH` — the only
+status the API ever writes is `DEFAULTED`, through the manual quorum. And
+`repaymentBps` is never escalated; its only runtime write *resets it down* to
+2,000.
+
+So PRD §35.3 — the scenario the PRD itself calls "the scenario worth
+demonstrating… the harder and more relevant claim" — cannot run. Manufactured
+revenue detected, limit to zero, draws blocked, repayment escalated to 35%,
+status RESTRICTED: all of it is a seed fixture. §36 criterion 14 fails with
+it.
+
+**Agent spending controls (§22.8) — none of the six are enforced.** Max
+payment, daily cap, allowlist, categories, blocked contracts, human-approval
+threshold: stored, displayed, editable over the API, consulted by no
+enforcement code. `CreditService.draw` never loads the policy; `category`
+reaches it only as a log string. `spentToday` is never incremented.
+`PolicyDecision` rows exist only in the seed, so the audit log is permanent
+fiction — against a schema comment that says "a policy nobody can audit after
+the fact is indistinguishable from no policy." The Save button has no
+`onClick` and `PATCH /policy` has no caller.
+
+**The Revenue Router is never deployed or called.** Written and tested,
+absent from `deployments/arc-testnet.json`. `deployRouter` in the web store
+sets a local boolean; `routerAddress` is written by no code outside the seed.
+§36 criteria 9 and 11 fail, and the thesis — repayment taken *before* the
+money reaches the borrower — is currently repayment after, by direct call.
+
+**Endpoint verification returns `verified: true` unconditionally.** No DNS,
+no TLS, no 402 fetch, no nonce comparison. And `restoreBinding` lets a
+borrower clear their own binding restriction and restore their limit with no
+probe having run.
+
+**Two confirmed bugs.** The withdrawal fee is destroyed rather than retained:
+the provider is paid `immediate - fee` while `totalAssets` falls by the full
+`immediate`, so the fee accrues to nobody — contradicting both the UI copy
+and `RivoraCreditVault.sol`, which keeps it. And the LP queue position is the
+literal string `#1`; `queueClearanceDays()` exists in `@rivora/core` and is
+called from nowhere, so there is no estimated availability date (§22.6).
+
+**Scorecard at audit time:** §36 acceptance criteria 11/15; §35.4
+must-include 11/14 (no x402 paid API, no AI-generated explanation, no
+router); §22.7 1/9; §22.8 0/6.
+
+Closing these is tracked as items 14–17 below.
+
+---
+
 ## Smaller items
 
 - **The endpoint probe reports against stored state.** `verifyEndpoint` returns
