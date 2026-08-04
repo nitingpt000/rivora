@@ -223,4 +223,42 @@ contract AdversarialTest is Test {
         assertLe(burned, sharesBefore, "burned more shares than held");
         assertLe(immediateOut + queued, exit + 1, "plan exceeds the request");
     }
+
+    // ── router rotation ────────────────────────────────────────────────────
+
+    /**
+     * A borrower must be able to change router without being re-registered.
+     *
+     * Registration was the only place the field could be written, so a router
+     * that had to be replaced — upgraded, or compromised — stranded the
+     * borrower with the original permanently.
+     */
+    function test_routerCanBeRotatedAndTheOldOneLosesAuthority() public {
+        address replacement = makeAddr("replacementRouter");
+
+        vm.prank(admin);
+        manager.setRevenueRouter(BORROWER_ID, replacement);
+
+        assertEq(manager.accountOf(BORROWER_ID).revenueRouter, replacement);
+        assertTrue(manager.hasRole(manager.ROUTER_ROLE(), replacement));
+        assertEq(manager.routerToBorrower(replacement), BORROWER_ID);
+
+        // The replaced router must not still be able to book repayments.
+        assertFalse(manager.hasRole(manager.ROUTER_ROLE(), router));
+        assertEq(manager.routerToBorrower(router), bytes32(0));
+    }
+
+    function test_onlyRiskMayRotateTheRouter() public {
+        address replacement = makeAddr("replacementRouter");
+
+        vm.prank(borrower);
+        vm.expectRevert();
+        manager.setRevenueRouter(BORROWER_ID, replacement);
+    }
+
+    function test_routerCannotBeRotatedToNothing() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        manager.setRevenueRouter(BORROWER_ID, address(0));
+    }
 }

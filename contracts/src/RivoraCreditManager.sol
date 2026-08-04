@@ -69,6 +69,9 @@ contract RivoraCreditManager is AccessControl, ReentrancyGuard, Pausable {
     mapping(Tier tier => uint256 rateBps) public tierRateBps;
 
     event BorrowerRegistered(bytes32 indexed borrowerId, address indexed owner, address router);
+    event RevenueRouterChanged(
+        bytes32 indexed borrowerId, address indexed previous, address indexed current
+    );
     event LimitUpdated(
         bytes32 indexed borrowerId, uint256 previousLimit, uint256 newLimit, uint256 riskScore
     );
@@ -343,6 +346,40 @@ contract RivoraCreditManager is AccessControl, ReentrancyGuard, Pausable {
      * endpoint probe finds the advertised `payTo` no longer matches the bound
      * router — the moment repayment stops being structural.
      */
+    /**
+     * Points a borrower at a different Revenue Router.
+     *
+     * Registration used to be the only place a router could be set, so a
+     * borrower whose router had to be replaced — upgraded, or compromised —
+     * was stranded with the original forever: `registerBorrower` reverts on
+     * an existing account and nothing else could write the field.
+     *
+     * The old router's authority is revoked in the same call that grants the
+     * new one's. Leaving it able to book repayments would mean a replaced
+     * router could still credit debt it no longer collects.
+     *
+     * `RISK_ROLE` rather than the borrower: the router is where repayment is
+     * taken before the borrower sees the money, so letting them repoint it
+     * unilaterally would undo the arrangement the credit was extended on.
+     * The event is what the binding probe watches for.
+     */
+    function setRevenueRouter(bytes32 borrowerId, address newRouter) external onlyRole(RISK_ROLE) {
+        BorrowerAccount storage account = _requireAccount(borrowerId);
+        if (newRouter == address(0)) revert ZeroAddress();
+
+        address previous = account.revenueRouter;
+        if (previous == newRouter) return;
+
+        _revokeRole(ROUTER_ROLE, previous);
+        delete routerToBorrower[previous];
+
+        account.revenueRouter = newRouter;
+        routerToBorrower[newRouter] = borrowerId;
+        _grantRole(ROUTER_ROLE, newRouter);
+
+        emit RevenueRouterChanged(borrowerId, previous, newRouter);
+    }
+
     function restrict(bytes32 borrowerId, string calldata reason) external onlyRole(RISK_ROLE) {
         BorrowerAccount storage account = _requireAccount(borrowerId);
 

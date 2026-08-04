@@ -15,6 +15,7 @@
     "deploy:arc": "node scripts/forge.mjs script script/Deploy.s.sol --rpc-url arc_testnet --broadcast",
     "circle:setup": "node scripts/circle/setup.mjs",
     "circle:deploy": "node scripts/circle/deploy.mjs",
+    "circle:deploy-router": "node scripts/circle/deploy-router.mjs",
     "circle:status": "node scripts/circle/status.mjs",
     "fmt": "node scripts/forge.mjs fmt",
     "lint": "node scripts/forge.mjs fmt --check",
