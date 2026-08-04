@@ -166,9 +166,11 @@ export class AnomalyDetailDto {
 
   @ApiProperty({
     example: -68,
-    description: 'Revenue net of the gas and fees spent generating it. Negative proves the activity was not economic.',
+    nullable: true,
+    description:
+      'Revenue net of the gas and fees spent generating it. Negative proves the activity was not economic. Null when it could not be measured — establishing it needs the payers’ own transaction costs, which the protocol cannot see, and a zero here would assert a measurement never taken.',
   })
-  netEconomicRevenue: number;
+  netEconomicRevenue: number | null;
 
   @ApiProperty({ example: '0x8b41…c07e' })
   evidenceHash: string;
@@ -458,4 +460,16 @@ export class AuditEntryDto {
 
   @ApiPropertyOptional({ example: '5f2c1a9e-…' })
   requestId?: string;
+}
+
+/** Lifting a restriction. The note is recorded permanently. */
+export class ReinstateDto {
+  @ApiProperty({
+    example: 'related wallets confirmed unrelated after review of the funding graph',
+    description:
+      'Why the restriction is being lifted. Recorded verbatim on the borrower record — a risk decision reversed without a stated reason is indistinguishable from one made carelessly.',
+  })
+  @IsString()
+  @Length(3, 300)
+  note: string;
 }

@@ -35,6 +35,7 @@ import {
   BorrowerRiskDetailDto,
   ExposureReportDto,
   LimitRecommendationDto,
+  ReinstateDto,
   RiskAlertDto,
   RiskParameterDto,
   WatchlistEntryDto,
@@ -120,6 +121,30 @@ export class RiskController {
   @ApiNotFoundResponse({ type: ApiErrorDto })
   async reassess(@Param('handle') handle: string): Promise<BorrowerRiskDetailDto> {
     await this.risk.reassess(handle);
+    return this.risk.borrower(handle);
+  }
+
+  @Post('borrower/:handle/reinstate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Lift a restriction',
+    description: [
+      'Returns a RESTRICTED or WATCH borrower to ACTIVE and resets the repayment share to its normal level.',
+      '',
+      'Detection is automatic; lifting is not. Protecting the book from a borrower inflating their own revenue should not wait for somebody to be awake, and releasing a borrower from that judgement should never happen because a number drifted back over a line.',
+      '',
+      'The limit is **not** restored — it stays at zero until an assessment sets it, so a reinstated borrower is underwritten again rather than handed back the number they held before the finding.',
+    ].join('\n'),
+  })
+  @ApiParam({ name: 'handle', example: '0x9c4e…a7f1' })
+  @ApiOkResponse({ type: BorrowerRiskDetailDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  async reinstate(
+    @Param('handle') handle: string,
+    @Body() body: ReinstateDto,
+    @CurrentUser() user: SessionUserDto,
+  ): Promise<BorrowerRiskDetailDto> {
+    await this.risk.reinstate(handle, user.address, body.note);
     return this.risk.borrower(handle);
   }
 

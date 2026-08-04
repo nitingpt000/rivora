@@ -262,6 +262,23 @@ export class BorrowerService {
       throw new LedgerError('The router binding is already verified.', 'binding_ok');
     }
 
+    /**
+     * A borrower may repair their own endpoint. They may not clear a risk
+     * decision.
+     *
+     * This path used to set ACTIVE and restore the limit for *any*
+     * restriction, so a borrower restricted for funding their own revenue
+     * could lift it by fixing an unrelated binding. A restriction the
+     * protocol imposed for manufactured revenue is lifted by an operator
+     * through `POST /risk/borrower/:handle/reinstate`, or not at all.
+     */
+    if (credit.restrictReason && credit.restrictReason !== 'binding') {
+      throw new LedgerError(
+        `This restriction was imposed by a risk decision (${credit.restrictReason}) and cannot be cleared by re-verifying the endpoint. A risk operator must lift it.`,
+        'restriction_not_self_clearable',
+      );
+    }
+
     await this.ledger.run(async (tx) => {
       await tx.serviceHealth.update({
         where: { id: health.id },

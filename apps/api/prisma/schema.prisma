@@ -674,7 +674,12 @@ model Anomaly {
   daysSpanned        Int
   /// Revenue net of the gas and fees spent generating it. Negative proves the
   /// activity was not economic.
-  netEconomicRevenue Decimal  @db.Decimal(20, 6)
+  ///
+  /// Null when it could not be measured: establishing it needs the payers'
+  /// own transaction costs, which the protocol cannot see. A zero here would
+  /// assert a measurement that was never taken, and this record exists to be
+  /// argued with.
+  netEconomicRevenue Decimal? @db.Decimal(20, 6)
 
   /// Onchain evidence commitment, and the transaction that wrote it.
   evidenceHash String

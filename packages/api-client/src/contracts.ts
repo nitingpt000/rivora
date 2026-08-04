@@ -723,7 +723,7 @@ export interface AnomalyDetail {
   payerCount: number;
   daysSpanned: number;
   /** Negative proves the activity was not economic. */
-  netEconomicRevenue: number;
+  netEconomicRevenue: number | null;
   evidenceHash: string;
   txHash: string;
   evidence: AnomalyEvidence[];

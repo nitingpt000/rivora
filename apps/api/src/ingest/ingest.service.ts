@@ -6,6 +6,7 @@ import { dec, toNumber, usdc6 } from '../common/decimal';
 import { attributionStats, type AttributionStats } from './attribution';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DetectionService } from '../risk/detection.service';
 import type { IngestRevenueDto, IngestResultDto } from './ingest.dto';
 
 /** Days of settled revenue behind the underwriting window. PRD §13.2. */
@@ -42,6 +43,7 @@ export class IngestService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly assessments: AssessmentService,
+    private readonly detection: DetectionService,
   ) {}
 
   async record(input: IngestRevenueDto): Promise<IngestResultDto> {
@@ -66,7 +68,7 @@ export class IngestService {
       .filter((payer) => payer.excluded)
       .reduce((sum, payer) => sum + payer.amount, 0);
 
-    const { replaced, eligibleBefore } = await this.ledger.run(async (tx) => {
+    const { replaced, eligibleBefore, hhiBefore } = await this.ledger.run(async (tx) => {
       const existing = await tx.revenueDay.findUnique({
         where: { borrowerId_date: { borrowerId: borrower.id, date } },
         select: { id: true },
@@ -74,7 +76,7 @@ export class IngestService {
 
       const before = await tx.revenueWindow.findUnique({
         where: { borrowerId: borrower.id },
-        select: { eligible: true },
+        select: { eligible: true, hhi: true },
       });
 
       const day = await tx.revenueDay.upsert({
@@ -128,7 +130,11 @@ export class IngestService {
         borrowerId: borrower.id,
       });
 
-      return { replaced: existing !== null, eligibleBefore: toNumber(before?.eligible ?? 0) };
+      return {
+        replaced: existing !== null,
+        eligibleBefore: toNumber(before?.eligible ?? 0),
+        hhiBefore: before?.hhi ?? 0,
+      };
     });
 
     const after = await this.prisma.revenueWindow.findUnique({
@@ -153,6 +159,20 @@ export class IngestService {
         this.logger.error(`could not reassess ${borrower.handle}: ${String(cause)}`);
         return this.result(input, excluded, replaced, eligibleAfter, false);
       }
+    }
+
+    /**
+     * Detection runs last, and after the assessment.
+     *
+     * A restriction withdraws the limit an assessment may have just set; if
+     * the order were reversed the assessment would hand it straight back. A
+     * detector that throws must not reject observed settlement either — the
+     * revenue is a fact regardless of what was concluded from it.
+     */
+    try {
+      await this.detection.evaluate(borrower.id, { eligible: eligibleBefore, hhi: hhiBefore });
+    } catch (cause) {
+      this.logger.error(`detection failed for ${borrower.handle}: ${String(cause)}`);
     }
 
     return this.result(input, excluded, replaced, eligibleAfter, material);

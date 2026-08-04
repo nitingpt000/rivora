@@ -17,6 +17,7 @@ import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerError } from '../common/ledger.error';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DetectionService } from './detection.service';
 import type {
   AnomalyDetailDto,
   DeclarationStatusDto,
@@ -55,6 +56,7 @@ export class RiskService {
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
     private readonly assessments: AssessmentService,
+    private readonly detection: DetectionService,
   ) {}
 
   /**
@@ -340,6 +342,46 @@ export class RiskService {
   }
 
   /**
+   * Lifts a restriction the protocol imposed.
+   *
+   * Refuses when there is nothing to lift, so an operator cannot record a
+   * reversal of a decision that was never made — the audit trail would then
+   * show a restriction being lifted that no one can find.
+   */
+  async reinstate(handle: string, operator: string, note: string): Promise<void> {
+    const borrower = await this.prisma.borrower.findUnique({
+      where: { handle },
+      select: { id: true, handle: true, creditLine: { select: { status: true } } },
+    });
+
+    if (!borrower) {
+      throw new NotFoundException({
+        error: `No borrower is registered under the handle "${handle}".`,
+        code: 'borrower_not_found',
+        statusCode: 404,
+      });
+    }
+
+    const status = borrower.creditLine?.status;
+
+    if (status === 'DEFAULTED') {
+      throw new LedgerError(
+        'A default is permanent and cannot be reinstated. The cure path is the only route from here.',
+        'already_defaulted',
+      );
+    }
+
+    if (status !== 'RESTRICTED' && status !== 'WATCH') {
+      throw new LedgerError(
+        `${handle} is ${status ?? 'unknown'} — there is no restriction to lift.`,
+        'not_restricted',
+      );
+    }
+
+    await this.detection.reinstate(borrower.id, borrower.handle, operator, note);
+  }
+
+  /**
    * One borrower, as a risk operator sees them.
    *
    * Exact factor values rather than bands: an operator deciding whether to
@@ -493,7 +535,9 @@ export class RiskService {
       washAmount: toNumber(row.washAmount),
       payerCount: row.payerCount,
       daysSpanned: row.daysSpanned,
-      netEconomicRevenue: toNumber(row.netEconomicRevenue),
+      // Null when it was never measured — the operator sees "not measured"
+      // rather than a zero that reads as "measured, and it came to nothing".
+      netEconomicRevenue: row.netEconomicRevenue === null ? null : toNumber(row.netEconomicRevenue),
       evidenceHash: row.evidenceHash,
       txHash: row.txHash,
       // Display-only JSON columns. Prisma types them as opaque `JsonValue`,

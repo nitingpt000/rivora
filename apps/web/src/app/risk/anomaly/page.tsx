@@ -136,11 +136,20 @@ export default function AnomalyPage() {
           </div>
         </div>
 
-        <Callout severity="danger">
-          Net economic revenue from these payers:{' '}
-          <strong>{usdc(anomaly.netEconomicRevenue)} USDC</strong> after routing costs. The borrower
-          paid itself at a loss.
-        </Callout>
+        {anomaly.netEconomicRevenue === null ? (
+          <Callout severity="warn">
+            Net economic revenue from these payers was <strong>not measured</strong>. Establishing
+            it needs the payers&rsquo; own transaction costs, which the protocol cannot see — so
+            this finding rests on the funding pattern and the excluded amount, not on proving the
+            activity ran at a loss.
+          </Callout>
+        ) : (
+          <Callout severity="danger">
+            Net economic revenue from these payers:{' '}
+            <strong>{usdc(anomaly.netEconomicRevenue)} USDC</strong> after routing costs. The
+            borrower paid itself at a loss.
+          </Callout>
+        )}
       </Section>
 
       <Grid cols={2} style={{ marginBottom: 14 }}>
