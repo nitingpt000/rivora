@@ -88,6 +88,13 @@ services:
       CREDIT_VAULT_ADDRESS: ${CREDIT_VAULT_ADDRESS:-0xa0fd0db6b2418d2bc9e445f50fa620bb547e9407}
       CREDIT_MANAGER_ADDRESS: ${CREDIT_MANAGER_ADDRESS:-0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1}
       RISK_REGISTRY_ADDRESS: ${RISK_REGISTRY_ADDRESS:-0x151259fd145bf22289a625169d7c99036ad1b01b}
+      ARC_RPC_URL: ${ARC_RPC_URL:-https://rpc.testnet.arc.io}
+      # Circle Developer-Controlled Wallet — required only when CHAIN_MODE=arc.
+      # No values belong in this file; feed them from the API's own env file:
+      #   docker compose --env-file apps/api/.env up -d api
+      CIRCLE_API_KEY: ${CIRCLE_API_KEY:-}
+      CIRCLE_ENTITY_SECRET: ${CIRCLE_ENTITY_SECRET:-}
+      CIRCLE_WALLET_ID: ${CIRCLE_WALLET_ID:-}
     ports:
       - '${API_PORT:-4000}:4000'
     depends_on:

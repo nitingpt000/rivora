@@ -156,7 +156,7 @@ used the conventional 0–10,000 scale, so an HHI of 653 reported as HIGH.
 
 ---
 
-## ~~6. The chain layer is a scaffold, not an integration~~ — implemented, not yet live-fired
+## ~~6. The chain layer is a scaffold, not an integration~~ — closed, live-fired on Arc testnet
 
 **Where:** [apps/api/src/chain/arc-chain.service.ts](apps/api/src/chain/arc-chain.service.ts)
 
@@ -183,17 +183,28 @@ What exists now, none of which did when this entry was written:
   signatures, 6-decimal integer amounts, tier indices, the borrower-id
   derivation (`keccak256(handle)`, byte-identical to the Foundry suite's).
 
-**Why "not yet live-fired."** The code has never broadcast against the real
-testnet, because the remaining steps are custody actions only the admin
-wallet can take:
+**Live-fired 2026-08-04.** The admin ran `arc-grant.mjs` (the one human step:
+underwriter grant + borrower registration), then the whole loop ran against
+the real testnet:
 
-1. Create the wallet (`ARC-TESTNET`) and put `CIRCLE_API_KEY`,
-   `CIRCLE_ENTITY_SECRET`, `CIRCLE_WALLET_ID` in `apps/api/.env`.
-2. From the admin wallet: grant the Circle wallet `UNDERWRITER_ROLE` on the
-   registry, and register each borrower in the Manager with the Circle wallet
-   as `owner`.
-3. Fund it — native USDC for gas, ERC-20 USDC for repayments — and set
-   `CHAIN_MODE=arc`.
+- The Circle wallet deposited 10 USDC of vault liquidity
+  (`arc-ops.mjs fund`, tx `0xa6e1e132…9d7eda`).
+- An operator-requested reassessment through the HTTP API signed and
+  submitted a real assessment — score 74, limit 2,440 USDC, registry nonce
+  0 → 1 (tx `0xac647441…7338d8`). The EIP-712 domain and typehash matched
+  the deployed registry first try, which is what the wire-format tests were
+  for.
+- `syncLimitFromRegistry` adopted it; the borrower left OBSERVATION for
+  ACTIVE onchain (tx `0xb78b07e0…adcb58`).
+- A borrower draw of 3 USDC through `POST /credit/draw` broadcast
+  `Manager.draw` (tx `0xe077f787…fff1bc`). Vault 10 → 7 USDC; operating
+  wallet +3. The activity feed shows the real hash.
+
+The stack runs arc mode with
+`docker compose --env-file .env --env-file apps/api/.env up -d`; plain
+`docker compose up` still gives ledger mode, and the smoke suite belongs to
+ledger mode only — 122 API calls broadcasting real transactions would be a
+gas bill, not a test.
 
 `distributeRevenue` still refuses, correctly: no revenue router is deployed,
 because whether nanopayment proceeds can settle into one is item 8's open
