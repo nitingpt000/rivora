@@ -536,20 +536,40 @@ rejected the same way. The bisect that settled it is worth keeping in mind
 for any future SCP work — vary one field, deploy, repeat, because the API
 will not tell you.
 
-**So this remains, in order:**
+**Closed 2026-08-04: revenue routes through the router onchain.** The
+borrower was registered with the router bound at registration — cheaper than
+a second admin transaction, and `setRevenueRouter` stays for what it was
+built for, rotating a router that already exists. The whole loop then ran:
 
-1. `setRevenueRouter` from the admin wallet — the command is printed by the
-   deploy script, and needs `RISK_ROLE`.
-2. `ARC_REVENUE_ROUTERS=<handle>=0x…` in `apps/api/.env`.
-3. `arc-grant.mjs` against the new deployment: the Circle wallet needs
-   `UNDERWRITER_ROLE` again, and the borrower re-registering, because the
-   new contracts know nothing about either.
-4. Fund the new vault — `arc-ops.mjs fund <n>` — since liquidity does not
-   move across a redeployment.
+```
+assessment exported     0x7e3c3bea…60eff
+limit adopted           0x5948b18d…11a7c   → 2,440 USDC, ACTIVE
+draw 5 USDC             0x556d256d…ee03a   → vault 12 → 7
+2 USDC revenue → router 0x724295f4…9f69d
+distributeRevenue()     0x143b0b01…1f904
+```
 
-Until then repayment in arc mode is a direct `repay` call by the borrower —
-it works, but it happens *after* they hold the money rather than before, so
-the structural-repayment claim is not yet true onchain.
+The split: vault **+0.40** (20%), reserve and operating **+1.60** between
+them, router left holding **zero** — the three parts sum to exactly the
+input, which is what `splitRevenue` computing the operating share as a
+remainder is for. Reserve and operating are the same address on testnet, so
+their shares land together.
+
+And the debt moved: principal **5.000 → 4.600** onchain, the manager having
+booked the routed repayment through `ROUTER_ROLE`. That is PRD §36 criteria
+9, 10 and 11 — revenue enters the Router, it repays automatically, the
+borrower receives the remainder — true onchain rather than in the ledger.
+
+**A mistake worth recording.** `arc-ops.mjs` had the contract addresses
+hardcoded, so the first `fund` after redeployment paid 10 USDC into the
+*previous* vault. Nothing failed: the deposit succeeded, the balance read
+looked plausible, and the money went somewhere nothing points at. A contract
+address that outlives its deployment is the most convincing kind of wrong
+value, because every call against it still works. Recovered by withdrawing
+the position from the old vault — which incidentally exercised the exit
+queue against a real deployment: 19 USDC requested, 14 served immediately
+and 5 queued behind the buffer floor, exactly as `planWithdrawal` says. The
+script now reads `deployments/arc-testnet.json`.
 
 ---
 
