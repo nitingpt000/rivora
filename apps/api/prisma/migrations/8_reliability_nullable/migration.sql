@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "RevenueDay" ALTER COLUMN "failedRequests" DROP NOT NULL,
+ALTER COLUMN "failedRequests" DROP DEFAULT,
+ALTER COLUMN "refunded" DROP NOT NULL,
+ALTER COLUMN "refunded" DROP DEFAULT;

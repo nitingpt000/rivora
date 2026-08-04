@@ -19,6 +19,8 @@ function signals(overrides: Partial<DetectionSignals> = {}): DetectionSignals {
     washPayers: 0,
     washDays: 0,
     gross: 14_040,
+    successPct: 96.2,
+    priorSuccessPct: 96.2,
     ...overrides,
   };
 }
@@ -125,5 +127,33 @@ describe('several findings at once', () => {
 
   it('returns nothing to act on when nothing fired', () => {
     expect(severest(detect(signals()))).toBeNull();
+  });
+});
+
+describe('failure rate', () => {
+  it('freezes draws when fulfilment falls below the floor', () => {
+    const findings = detect(signals({ successPct: 84.5, priorSuccessPct: 96.2 }));
+
+    expect(findings[0]).toMatchObject({ kind: 'failure_rate', action: 'watch' });
+    expect(findings[0]!.reason).toContain('84.5%');
+  });
+
+  it('freezes draws on a sharp drop even from a healthy level', () => {
+    const findings = detect(signals({ successPct: 91.0, priorSuccessPct: 98.0 }));
+
+    expect(findings[0]).toMatchObject({ kind: 'failure_rate' });
+    expect(findings[0]!.reason).toContain('fell 7.0 points');
+  });
+
+  it('ignores ordinary variation', () => {
+    expect(detect(signals({ successPct: 95.1, priorSuccessPct: 96.2 }))).toEqual([]);
+  });
+
+  it('says nothing when reliability was never measured', () => {
+    // An indexer that reports no failure counts leaves successPct at its
+    // seeded value. Freezing draws over an unmeasured number would be acting
+    // on a fixture.
+    expect(detect(signals({ successPct: 0, priorSuccessPct: 0 }))).toEqual([]);
+    expect(detect(signals({ successPct: 50, priorSuccessPct: 0 }))).toEqual([]);
   });
 });

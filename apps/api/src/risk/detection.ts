@@ -26,9 +26,12 @@ export interface DetectionSignals {
   washDays: number;
   /** Gross revenue in the window, the denominator for the wash share. */
   gross: number;
+  /** Share of paid requests fulfilled, after and before. */
+  successPct: number;
+  priorSuccessPct: number;
 }
 
-export type FindingKind = 'circular' | 'revenue_decline' | 'concentration';
+export type FindingKind = 'circular' | 'revenue_decline' | 'concentration' | 'failure_rate';
 
 export interface Finding {
   kind: FindingKind;
@@ -73,6 +76,18 @@ const HHI_JUMP = 750;
 /** Level at which concentration is unacceptable regardless of history. */
 const HHI_CEILING = 2_500;
 
+/**
+ * Fulfilment below which the service is failing its customers.
+ *
+ * A paid request that is not served is a refund waiting to happen and a
+ * customer deciding to leave, so this is a leading indicator of the revenue
+ * decline above rather than a separate concern.
+ */
+const SUCCESS_FLOOR = 90;
+
+/** Drop in fulfilment that is an event even from a healthy level. */
+const SUCCESS_DROP = 5;
+
 export function detect(signals: DetectionSignals): Finding[] {
   const findings: Finding[] = [];
 
@@ -108,6 +123,30 @@ export function detect(signals: DetectionSignals): Finding[] {
         ? `payer concentration reached ${Math.round(signals.hhi)} HHI, at or past the ${HHI_CEILING} ceiling — largest payer holds ${signals.largestPayerPct.toFixed(1)}%`
         : `payer concentration rose ${Math.round(signals.hhi - signals.priorHhi)} points to ${Math.round(signals.hhi)} HHI — largest payer holds ${signals.largestPayerPct.toFixed(1)}%`,
     });
+  }
+
+  /**
+   * Only when reliability was actually measured. A borrower whose indexer
+   * reports no failure counts has `successPct` at whatever it was seeded
+   * with, and freezing draws over an unmeasured number would be acting on a
+   * fixture.
+   */
+  if (signals.successPct > 0 && signals.priorSuccessPct > 0) {
+    const dropped = signals.priorSuccessPct - signals.successPct;
+
+    if (signals.successPct < SUCCESS_FLOOR) {
+      findings.push({
+        kind: 'failure_rate',
+        action: 'watch',
+        reason: `only ${signals.successPct.toFixed(1)}% of paid requests were fulfilled — below the ${SUCCESS_FLOOR}% floor`,
+      });
+    } else if (dropped >= SUCCESS_DROP) {
+      findings.push({
+        kind: 'failure_rate',
+        action: 'watch',
+        reason: `fulfilment fell ${dropped.toFixed(1)} points — ${signals.priorSuccessPct.toFixed(1)}% to ${signals.successPct.toFixed(1)}%`,
+      });
+    }
   }
 
   return findings;

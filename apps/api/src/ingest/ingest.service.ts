@@ -68,7 +68,7 @@ export class IngestService {
       .filter((payer) => payer.excluded)
       .reduce((sum, payer) => sum + payer.amount, 0);
 
-    const { replaced, eligibleBefore, hhiBefore } = await this.ledger.run(async (tx) => {
+    const { replaced, eligibleBefore, hhiBefore, successBefore } = await this.ledger.run(async (tx) => {
       const existing = await tx.revenueDay.findUnique({
         where: { borrowerId_date: { borrowerId: borrower.id, date } },
         select: { id: true },
@@ -77,6 +77,13 @@ export class IngestService {
       const before = await tx.revenueWindow.findUnique({
         where: { borrowerId: borrower.id },
         select: { eligible: true, hhi: true },
+      });
+      // Captured before `recomputeHealth` overwrites it — the detector
+      // compares the two, so reading it afterwards would compare a value
+      // with itself.
+      const healthBefore = await tx.serviceHealth.findUnique({
+        where: { borrowerId: borrower.id },
+        select: { successPct: true },
       });
 
       const day = await tx.revenueDay.upsert({
@@ -87,6 +94,8 @@ export class IngestService {
           settled: usdc6(dec(input.settled)),
           excluded: usdc6(dec(excluded)),
           requests: input.requests,
+          failedRequests: input.failed ?? null,
+          refunded: input.refunded === undefined ? null : usdc6(dec(input.refunded)),
         },
         // A corrected batch replaces the earlier reading. Adding to it would
         // double-count a retry, and a retry is the normal case for an indexer.
@@ -94,6 +103,8 @@ export class IngestService {
           settled: usdc6(dec(input.settled)),
           excluded: usdc6(dec(excluded)),
           requests: input.requests,
+          failedRequests: input.failed ?? null,
+          refunded: input.refunded === undefined ? null : usdc6(dec(input.refunded)),
         },
         select: { id: true },
       });
@@ -134,6 +145,7 @@ export class IngestService {
         replaced: existing !== null,
         eligibleBefore: toNumber(before?.eligible ?? 0),
         hhiBefore: before?.hhi ?? 0,
+        successBefore: healthBefore?.successPct ?? 0,
       };
     });
 
@@ -170,7 +182,11 @@ export class IngestService {
      * revenue is a fact regardless of what was concluded from it.
      */
     try {
-      await this.detection.evaluate(borrower.id, { eligible: eligibleBefore, hhi: hhiBefore });
+      await this.detection.evaluate(borrower.id, {
+        eligible: eligibleBefore,
+        hhi: hhiBefore,
+        successPct: successBefore,
+      });
     } catch (cause) {
       this.logger.error(`detection failed for ${borrower.handle}: ${String(cause)}`);
     }
@@ -251,6 +267,58 @@ export class IngestService {
       windowEligible,
       reassessed,
     };
+  }
+
+  /**
+   * Derives reliability from what was observed, rather than trusting a fixture.
+   *
+   * `successPct` and `refundRatePct` feed the score through factor S — and
+   * were never written by any runtime path, so the protocol was underwriting
+   * a service whose failures it could not see. They are computed here from
+   * the same window the revenue is.
+   *
+   * A window that reports no failures at all leaves the stored values alone.
+   * Absence of data is not evidence of perfection: an indexer that has not
+   * started sending failure counts should not silently promote every borrower
+   * to 100% reliable.
+   */
+  private async recomputeHealth(
+    tx: Prisma.TransactionClient,
+    borrowerId: string,
+    window: Array<{
+      requests: number;
+      failedRequests: number | null;
+      settled: unknown;
+      refunded: unknown;
+    }>,
+  ): Promise<void> {
+    // Only days that reported. A day that said nothing about failures is
+    // silent, not clean, and averaging it in as zero is how an unreliable
+    // service scores well.
+    const reported = window.filter((day) => day.failedRequests !== null);
+    const refundReported = window.filter((day) => day.refunded !== null);
+
+    if (reported.length === 0) return;
+
+    const fulfilled = reported.reduce((sum, day) => sum + day.requests, 0);
+    const failed = reported.reduce((sum, day) => sum + (day.failedRequests ?? 0), 0);
+    const attempted = fulfilled + failed;
+    if (attempted === 0) return;
+
+    const settled = refundReported.reduce((sum, day) => sum + toNumber(day.settled as never), 0);
+    const refunded = refundReported.reduce((sum, day) => sum + toNumber(day.refunded as never), 0);
+
+    await tx.serviceHealth.update({
+      where: { borrowerId },
+      data: {
+        successPct: Math.round((fulfilled / attempted) * 1000) / 10,
+        // Left alone when no day reported a refund figure, for the same
+        // reason: silence is not zero.
+        ...(refundReported.length > 0 && settled > 0
+          ? { refundRatePct: Math.round((refunded / settled) * 1000) / 10 }
+          : {}),
+      },
+    });
   }
 
   /**
@@ -381,7 +449,15 @@ export class IngestService {
       where: { borrowerId },
       orderBy: { date: 'desc' },
       take: WINDOW_DAYS * 2,
-      select: { id: true, date: true, settled: true, excluded: true },
+      select: {
+        id: true,
+        date: true,
+        settled: true,
+        excluded: true,
+        requests: true,
+        failedRequests: true,
+        refunded: true,
+      },
     });
 
     const window = days.slice(0, WINDOW_DAYS);
@@ -398,6 +474,7 @@ export class IngestService {
       priorGross > 0 ? Math.round(((gross - priorGross) / priorGross) * 1000) / 10 : 0;
 
     const rollup = await this.rebuildPayerSummaries(tx, borrowerId, window, eligible);
+    await this.recomputeHealth(tx, borrowerId, window);
 
     await tx.revenueWindow.update({
       where: { borrowerId },

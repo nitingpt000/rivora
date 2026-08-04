@@ -83,6 +83,25 @@ export class IngestRevenueDto {
   requests: number;
 
   @ApiPropertyOptional({
+    example: 412,
+    description:
+      'Paid requests the service failed to fulfil. Optional, and its absence is read as "not reported" rather than as zero — a service that never reports failures should not be scored as though it had none.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  failed?: number;
+
+  @ApiPropertyOptional({
+    example: 12.4,
+    description: 'Revenue refunded on the day, USDC. Feeds the refund rate.',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(0)
+  refunded?: number;
+
+  @ApiPropertyOptional({
     type: [IngestPayerDto],
     description:
       'Per-payer breakdown. Without it the day still counts toward revenue, but concentration and diversity cannot be recomputed from it.',

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "RevenueDay" ADD COLUMN     "failedRequests" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "refunded" DECIMAL(20,6) NOT NULL DEFAULT 0;

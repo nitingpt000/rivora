@@ -635,6 +635,40 @@ second payment erase the first.
 
 ---
 
+## ~~16. Reliability was a fixture the protocol scored itself against~~ — closed
+
+The last of PRD §22.7's nine. `successPct` and `refundRatePct` fed factor S
+and the score, and **no runtime path ever wrote them** — they came from the
+seed and stayed there, so the protocol was underwriting a service whose
+failures it had no way to observe. There was nothing to observe them with
+either: ingestion carried `settled` and `requests` and no notion of a request
+that failed.
+
+Ingestion now carries `failed` and `refunded`, reliability is recomputed from
+the window on every batch, and a failure-rate detector freezes new draws —
+below a 90% fulfilment floor, or on a 5-point drop from a healthy level.
+
+**The first attempt was wrong in the flattering direction**, which is the
+one that matters. The columns defaulted to `0`, so a day that reported
+nothing about failures was indistinguishable from a day that reported none.
+Ingesting one bad day against twenty-nine silent ones pushed measured
+success *up* — 96.2% to 99.4% — because the silent days averaged in as
+perfect. They are nullable now: `0` is a reported clean day, `null` is
+silence, and reliability is computed only over days that reported. The seed
+carries failure counts consistent with the 96.2% it asserts, so the fixture
+no longer contradicts itself.
+
+Verified live: ten days ingested at ~52% fulfilment moved measured success
+96.2% → **81.4%** and the borrower ACTIVE → WATCH, which blocks draws.
+
+Still a fixture, and honestly so: `uptimePct` and `coverageRatio`. Uptime
+needs a monitoring loop the protocol does not run — the endpoint probe
+observes a single moment, not availability over time. Coverage needs routed
+revenue measured against total, which needs the router to be the only way
+revenue arrives.
+
+---
+
 ## Smaller items
 
 - **The endpoint probe reports against stored state.** `verifyEndpoint` returns

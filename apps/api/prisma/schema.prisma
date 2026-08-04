@@ -549,6 +549,20 @@ model RevenueDay {
   excluded Decimal  @default(0) @db.Decimal(20, 6)
   requests Int      @default(0)
 
+  /// Paid requests the service failed to fulfil, and revenue refunded.
+  ///
+  /// Reliability was a seed fixture before these existed: `successPct` and
+  /// `refundRatePct` fed the score and were never written at runtime, so the
+  /// protocol underwrote a service whose failures it could not observe.
+  ///
+  /// Nullable, and the distinction matters. `0` means the indexer reported a
+  /// day with no failures; `null` means it reported nothing about failures at
+  /// all. Defaulting the second to the first mixes silent days into the
+  /// average and flatters the result — reliability is computed only over days
+  /// that actually reported.
+  failedRequests Int?
+  refunded       Decimal? @db.Decimal(20, 6)
+
   payers RevenueDayPayer[]
 
   @@unique([borrowerId, date])

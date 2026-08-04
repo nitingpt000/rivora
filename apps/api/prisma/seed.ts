@@ -255,6 +255,10 @@ const EXCLUDED_PAYERS = [
 ];
 
 /** Trailing 30-day totals for the primary borrower, USDC. */
+/** Reliability the seeded health row asserts; the day rows must produce it. */
+const SUCCESS_RATE = 0.962;
+const REFUND_RATE = 0.009;
+
 const GROSS_30D = 14_040;
 const EXCLUDED_30D = 540;
 
@@ -803,6 +807,13 @@ async function main(): Promise<void> {
       settled,
       excluded: index >= DAILY_REVENUE.length - EXCLUDED_DAYS ? EXCLUDED_PER_DAY : 0,
       requests: Math.round(settled / 0.04),
+      // Failures and refunds consistent with the health row below. The days
+      // carried no reliability data at all before, so the first real
+      // ingestion recomputed `successPct` from one reported day against
+      // twenty-nine silent ones and produced a flattering number. A fixture
+      // that states 96.2% success has to carry the failures that make it so.
+      failedRequests: Math.round((Math.round(settled / 0.04) / SUCCESS_RATE) * (1 - SUCCESS_RATE)),
+      refunded: Math.round(settled * REFUND_RATE * 1_000_000) / 1_000_000,
     })),
   });
 

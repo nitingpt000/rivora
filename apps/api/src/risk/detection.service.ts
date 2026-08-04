@@ -42,13 +42,16 @@ export class DetectionService {
    * ingestion transaction: acting on the window this write produced means
    * reading it after it commits.
    */
-  async evaluate(borrowerId: string, prior: { eligible: number; hhi: number }): Promise<Finding | null> {
+  async evaluate(
+    borrowerId: string,
+    prior: { eligible: number; hhi: number; successPct: number },
+  ): Promise<Finding | null> {
     const borrower = await this.prisma.borrower.findUnique({
       where: { id: borrowerId },
-      include: { creditLine: true, revenueWindow: true },
+      include: { creditLine: true, revenueWindow: true, health: true },
     });
 
-    if (!borrower?.creditLine || !borrower.revenueWindow) return null;
+    if (!borrower?.creditLine || !borrower.revenueWindow || !borrower.health) return null;
 
     // A borrower already in the worst state is not re-restricted. The record
     // stands; repeating it would bury the original finding under duplicates.
@@ -65,6 +68,8 @@ export class DetectionService {
       priorHhi: prior.hhi,
       largestPayerPct: window.largestPayerPct,
       gross: toNumber(window.gross),
+      successPct: borrower.health.successPct,
+      priorSuccessPct: prior.successPct,
       ...wash,
     };
 
@@ -155,6 +160,9 @@ export class DetectionService {
         where: { id: credit.id },
         data: {
           status: 'WATCH',
+          // `revenue` covers both a collapse and the failures that precede
+          // one; the schema enumerates two reasons and a failure rate is the
+          // revenue story arriving early.
           watchReason: finding.kind === 'concentration' ? 'concentration' : 'revenue',
         },
       });
