@@ -72,6 +72,31 @@ describe('withdraw', () => {
     expect(tx.written('vaultState', 'queueTotal')).toBeCloseTo(result.receipt.queued ?? 0, 6);
   });
 
+  /**
+   * The exit fee is the providers who stayed being paid by the one who left.
+   * If the book falls by the whole gross amount, the fee is charged to the
+   * leaver and credited to nobody — the vault is smaller than the money that
+   * actually moved, and every remaining share is worth less than it should
+   * be. The dialog and the vault contract both promise the opposite.
+   */
+  it('keeps the exit fee in the book rather than destroying it', async () => {
+    // High utilization puts the withdrawal past the fee threshold.
+    const { service, tx } = build(makeState({ availableLiquidity: 4_000 }));
+
+    const before = 25_000;
+    const walletBefore = 12_400;
+
+    await service.withdraw(3_000);
+
+    const paidToProvider = (tx.written('lpPosition', 'walletBalance') as number) - walletBefore;
+    const leftTheBook = before - (tx.written('vaultState', 'totalAssets') as number);
+
+    // Exactly what left the provider's side is what left the book.
+    expect(leftTheBook).toBeCloseTo(paidToProvider, 6);
+    // And a fee was actually charged, or this asserts nothing.
+    expect(paidToProvider).toBeLessThan(3_000);
+  });
+
   it('caps a withdrawal at the position value', async () => {
     const { service } = build();
 

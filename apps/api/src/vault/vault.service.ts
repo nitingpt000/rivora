@@ -123,11 +123,22 @@ export class VaultService {
           queued: usdc6(dec(lp.queued).plus(queued)),
         },
       });
+      /**
+       * The fee stays in the vault.
+       *
+       * The provider is paid `immediate - fee`, so only that much leaves.
+       * Reducing the book by the full `immediate` destroyed the fee instead
+       * of leaving it to the providers who did not exit — which is the whole
+       * reason for charging it, and what both the exit dialog and
+       * `RivoraCreditVault.fundDraw` say happens.
+       */
+      const paidOut = immediate.minus(fee);
+
       await tx.vaultState.update({
         where: { id: vault.id },
         data: {
-          totalAssets: usdc6(dec(vault.totalAssets).minus(immediate)),
-          availableLiquidity: usdc6(dec(vault.availableLiquidity).minus(immediate)),
+          totalAssets: usdc6(dec(vault.totalAssets).minus(paidOut)),
+          availableLiquidity: usdc6(dec(vault.availableLiquidity).minus(paidOut)),
           queueTotal: usdc6(dec(vault.queueTotal).plus(queued)),
         },
       });
