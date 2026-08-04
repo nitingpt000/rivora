@@ -3,7 +3,7 @@
   "chainId": 5042002,
   "rpcUrl": "https://rpc.testnet.arc.io",
   "explorer": "https://testnet.arcscan.app",
-  "verifiedAt": "2026-08-02T11:43:29.711Z",
+  "verifiedAt": "2026-08-04T11:13:00.000Z",
   "deployedVia": "circle-smart-contract-platform",
   "deployer": "0xc863804818a7131e46079de5b56e6c5d157603e7",
   "admin": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
@@ -12,8 +12,25 @@
     "usdc": "0x3600000000000000000000000000000000000000",
     "gatewayWallet": "0x0077777d7EBA4688BDeF3E311b846F25870A19B9",
     "gatewayMinter": "0x0022222ABE238Cc2C7Bb1f21003F0a260052475B",
+    "RivoraCreditVault": "0x78f34df804f71074cf6fbb4d6570593c1cb8e275",
+    "RivoraCreditManager": "0x0735cfdf5b661092bbd50765e1e50cc0a4ff8eed",
+    "RivoraRiskRegistry": "0xec8b8e26488cfe023070efe806569c11f85cb5bc"
+  },
+  "supersedes": {
+    "note": "Replaced 2026-08-04. The earlier set carried the exit-queue double-payment bug (AUDIT.md RIV-01) and predated setRevenueRouter. Contracts are not upgradeable, so fixing either meant redeploying.",
     "RivoraCreditVault": "0xa0fd0db6b2418d2bc9e445f50fa620bb547e9407",
     "RivoraCreditManager": "0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1",
     "RivoraRiskRegistry": "0x151259fd145bf22289a625169d7c99036ad1b01b"
+  },
+  "routers": {
+    "0x9c4e…a7f1": {
+      "address": "0xeefda804d1f8ce675479d3b935e34b2052863685",
+      "borrowerId": "0x725eb4947b553aeca119fba0bc0151022830c166ed40385eaa254e171cf4b236",
+      "repaymentBps": 2000,
+      "reserveBps": 200,
+      "reserveAccount": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
+      "operatingWallet": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
+      "boundToManager": false
+    }
   }
 }

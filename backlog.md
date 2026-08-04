@@ -496,14 +496,56 @@ borrower with the original forever. `setRevenueRouter` now rotates it under
 the new one's; leaving it able to book repayments would mean a replaced
 router could still credit debt it no longer collects.
 
-**To finish it, in order, all needing the protocol admin:**
+**Step 1 is done: the protocol was redeployed on 2026-08-04.** The Circle
+wallet signs the deployment and the handover, so no human key was needed.
 
-1. Redeploy the contracts. The live ones predate both the exit-queue fix
-   (item 10, RIV-01) and `setRevenueRouter`, and neither can be patched in
-   place — there is no upgrade path by design.
-2. `pnpm --filter @rivora/contracts circle:deploy-router <handle>`, then the
-   `setRevenueRouter` call it prints.
-3. Put `ARC_REVENUE_ROUTERS=<handle>=0x…` in `apps/api/.env`.
+```
+RivoraCreditVault    0x78f34df804f71074cf6fbb4d6570593c1cb8e275
+RivoraCreditManager  0x0735cfdf5b661092bbd50765e1e50cc0a4ff8eed
+RivoraRiskRegistry   0xec8b8e26488cfe023070efe806569c11f85cb5bc
+```
+
+Every role was verified onchain afterwards, one read at a time: the manager
+holds `CREDIT_MANAGER_ROLE` on the vault, the underwriter holds
+`UNDERWRITER_ROLE`, the admin holds `DEFAULT_ADMIN_ROLE` and `RISK_ROLE`
+everywhere, and `hasRole(DEFAULT_ADMIN, deployer)` is false on all three —
+the deployer renounced as intended.
+
+The deploy script itself exited non-zero: the public RPC rate-limited its
+verification reads, which run *after* the last transaction, so it never
+wrote `deployments/arc-testnet.json`. The addresses were recovered from
+Circle's own contract list and the file written by hand. Worth fixing —
+verification should back off and retry rather than treat a rate limit as a
+failed deployment.
+
+Roughly 9 USDC of the Circle wallet's shares are stranded in the old vault.
+Testnet, so it is a note rather than a problem.
+
+**Step 2 is done: the router is deployed** at
+`0xeefda804d1f8ce675479d3b935e34b2052863685`, verified onchain to carry the
+right `borrowerId`, both protocol addresses and the 20/2/78 split.
+
+Getting there cost three rejected attempts, because Circle answers every
+malformed deploy with the same bare `400 API parameter invalid` naming no
+field. Two things were wrong and the error could not distinguish them: the
+contract *name* may not carry non-ASCII (the handle holds an ellipsis) and
+may not be long — `Rivora RevenueRouter 0x9c4e-a7f1` is rejected where
+`Rivora RevenueRouter` is accepted. A third "fix" made it worse: uint256
+arguments must be JSON numbers, and sending them as decimal strings is
+rejected the same way. The bisect that settled it is worth keeping in mind
+for any future SCP work — vary one field, deploy, repeat, because the API
+will not tell you.
+
+**So this remains, in order:**
+
+1. `setRevenueRouter` from the admin wallet — the command is printed by the
+   deploy script, and needs `RISK_ROLE`.
+2. `ARC_REVENUE_ROUTERS=<handle>=0x…` in `apps/api/.env`.
+3. `arc-grant.mjs` against the new deployment: the Circle wallet needs
+   `UNDERWRITER_ROLE` again, and the borrower re-registering, because the
+   new contracts know nothing about either.
+4. Fund the new vault — `arc-ops.mjs fund <n>` — since liquidity does not
+   move across a redeployment.
 
 Until then repayment in arc mode is a direct `repay` call by the borrower —
 it works, but it happens *after* they hold the money rather than before, so

@@ -36,8 +36,11 @@ const CHAIN = {
 
 const ADMIN = '0xea830ac3972f950F73bb59067dA76ad1273F613c';
 const CIRCLE_WALLET = '0xc863804818a7131e46079de5b56e6c5d157603e7';
-const REGISTRY = '0x151259fd145bf22289a625169d7c99036ad1b01b';
-const MANAGER = '0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1';
+// The 2026-08-04 redeployment. The previous set carried the exit-queue
+// double-payment bug (AUDIT.md RIV-01) and predated `setRevenueRouter`;
+// neither is patchable in place, so both meant new addresses.
+const REGISTRY = '0xec8b8e26488cfe023070efe806569c11f85cb5bc';
+const MANAGER = '0x0735cfdf5b661092bbd50765e1e50cc0a4ff8eed';
 
 // The seeded borrower, exactly as the database spells it — the API derives
 // the onchain id as keccak256 of this string, so it must match to the byte.

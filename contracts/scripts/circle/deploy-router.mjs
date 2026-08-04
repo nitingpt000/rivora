@@ -88,9 +88,19 @@ if (balance === 0n) {
 const { abi, bytecode } = artifact('RivoraRevenueRouter');
 
 console.log('Deploying RivoraRevenueRouter');
+/**
+ * The Circle-side label, kept short and plain.
+ *
+ * SCP rejects a name carrying anything outside ASCII — handles are display
+ * strings and the seeded one holds an ellipsis — and rejects a long one too,
+ * both with the same bare `API parameter invalid` naming no field. The
+ * borrower this router belongs to is recorded in `deployments/` and, more to
+ * the point, in the immutable `borrowerId` the constructor takes, so the
+ * Circle console label carries no weight.
+ */
 const response = await contracts.deployContract({
-  name: `Rivora RevenueRouter ${handle}`,
-  description: `Revenue router for ${handle}`,
+  name: 'Rivora RevenueRouter',
+  description: 'Rivora protocol contract',
   blockchain: BLOCKCHAIN,
   walletId,
   abiJson: JSON.stringify(abi),
@@ -106,6 +116,9 @@ const response = await contracts.deployContract({
     manager,
     reserveAccount,
     operatingWallet,
+    // uint256 arguments go as JSON numbers. Circle rejects decimal strings
+    // for them with a bare `API parameter invalid` naming no field, which is
+    // an expensive thing to learn twice.
     repaymentBps,
     reserveBps,
   ],
