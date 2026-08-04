@@ -15,14 +15,31 @@
  *            API has exported an assessment.
  * `balances` — read-only look at where the USDC sits.
  */
+import { readFileSync } from 'node:fs';
+
 import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets';
 import { createPublicClient, http, keccak256, parseAbi, stringToBytes } from 'viem';
 
 const RPC_URL = process.env.ARC_RPC_URL ?? 'https://rpc.testnet.arc.io';
 const USDC = '0x3600000000000000000000000000000000000000';
-const VAULT = '0xa0fd0db6b2418d2bc9e445f50fa620bb547e9407';
-const MANAGER = '0xeecb677e45e9d53d94af0fc0edbf99a2f94ff5a1';
 const CIRCLE_WALLET = '0xc863804818a7131e46079de5b56e6c5d157603e7';
+
+/**
+ * Addresses come from the deployment record, never from constants here.
+ *
+ * They were hardcoded, and a redeployment silently turned this script into
+ * one that funds the *previous* vault: the deposit succeeded, the balance
+ * read looked plausible, and 10 USDC went somewhere nothing points at. A
+ * contract address that outlives its deployment is the most convincing kind
+ * of wrong value, because every call against it still works.
+ */
+const DEPLOYMENTS = new URL(
+  '../../../contracts/deployments/arc-testnet.json',
+  import.meta.url,
+);
+const { contracts } = JSON.parse(readFileSync(DEPLOYMENTS, 'utf8'));
+const VAULT = contracts.RivoraCreditVault;
+const MANAGER = contracts.RivoraCreditManager;
 
 // Must match the database handle to the byte — the API derives the same id.
 const BORROWER_HANDLE = '0x9c4e…a7f1';
