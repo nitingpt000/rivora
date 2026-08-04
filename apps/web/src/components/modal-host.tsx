@@ -530,6 +530,19 @@ function WithdrawDialog({ open }: { open: boolean }) {
                 <div style={{ fontSize: 13, color: 'var(--color-warn)', marginTop: 10 }}>
                   ⏱ Partially queued — immediate {usdc(plan.immediate)} · queued {usdc(plan.queued)}
                 </div>
+                {/*
+                  The fee was shown only on the unqueued branch, so a
+                  partially queued exit was charged one and never told. A cost
+                  disclosed in one branch and silently applied in the other is
+                  the branch that matters getting the worse treatment.
+                */}
+                {plan.fee > 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--color-neutral-600)', marginTop: 6 }}>
+                    Withdrawal fee at {pct(d.utilization * 100)} utilization: {usdc(plan.fee)} USDC (
+                    {pct(feeRate * 100)}), charged on the immediate portion and paid to the
+                    providers who stay.
+                  </div>
+                ) : null}
                 <div
                   style={{
                     display: 'grid',
