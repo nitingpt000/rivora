@@ -41,6 +41,8 @@ const CIRCLE_WALLET = '0xc863804818a7131e46079de5b56e6c5d157603e7';
 // neither is patchable in place, so both meant new addresses.
 const REGISTRY = '0xec8b8e26488cfe023070efe806569c11f85cb5bc';
 const MANAGER = '0x0735cfdf5b661092bbd50765e1e50cc0a4ff8eed';
+/** This borrower's Revenue Router — see contracts/deployments/arc-testnet.json. */
+const REVENUE_ROUTER = '0xeefda804d1f8ce675479d3b935e34b2052863685';
 
 // The seeded borrower, exactly as the database spells it — the API derives
 // the onchain id as keccak256 of this string, so it must match to the byte.
@@ -122,7 +124,21 @@ if (!key) {
         address: MANAGER,
         abi: MANAGER_ABI,
         functionName: 'registerBorrower',
-        args: [borrowerId, CIRCLE_WALLET, CIRCLE_WALLET, CIRCLE_WALLET, REPAYMENT_BPS, RESERVE_BPS],
+        args: [
+          borrowerId,
+          // Owner and operating wallet are both the Circle wallet: it is the
+          // API's signer, so it must be the owner for `draw` to pass, and on
+          // testnet it stands in for the borrower's treasury.
+          CIRCLE_WALLET,
+          // The real Revenue Router, registered up front. Registration is the
+          // cheapest moment to bind it — doing it later means a second admin
+          // transaction through `setRevenueRouter`, which exists for rotation
+          // rather than for setting what was known all along.
+          REVENUE_ROUTER,
+          CIRCLE_WALLET,
+          REPAYMENT_BPS,
+          RESERVE_BPS,
+        ],
       });
       await read.waitForTransactionReceipt({ hash });
       console.log(`2. Borrower registered, owner = Circle wallet — ${hash}`);

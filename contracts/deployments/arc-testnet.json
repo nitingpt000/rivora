@@ -30,7 +30,7 @@
       "reserveBps": 200,
       "reserveAccount": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
       "operatingWallet": "0xea830ac3972f950F73bb59067dA76ad1273F613c",
-      "boundToManager": false
+      "boundToManager": "bound at registration by arc-grant.mjs"
     }
   }
 }
