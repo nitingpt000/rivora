@@ -178,6 +178,63 @@ export class IngestService {
     return this.result(input, excluded, replaced, eligibleAfter, material);
   }
 
+  /**
+   * Adds one settled payment to today's revenue.
+   *
+   * The batch path above *replaces* a day, because a re-posted batch from an
+   * indexer is a corrected reading. A live payment is the opposite: it is
+   * one more event on a day still in progress, so this increments. Two write
+   * paths with opposite semantics is the correct answer here — collapsing
+   * them would make either a retried batch double-count or a second payment
+   * erase the first.
+   *
+   * The payer label is a pseudonym derived from the address. The wallet
+   * itself stays in `X402Payment` and never reaches a revenue surface
+   * (PRD §21).
+   */
+  async recordPayment(input: {
+    borrowerId: string;
+    handle: string;
+    label: string;
+    amount: number;
+    at: Date;
+  }): Promise<void> {
+    const date = new Date(`${input.at.toISOString().slice(0, 10)}T00:00:00.000Z`);
+
+    await this.ledger.run(async (tx) => {
+      const day = await tx.revenueDay.upsert({
+        where: { borrowerId_date: { borrowerId: input.borrowerId, date } },
+        create: {
+          borrowerId: input.borrowerId,
+          date,
+          settled: usdc6(dec(input.amount)),
+          requests: 1,
+        },
+        update: {
+          settled: { increment: usdc6(dec(input.amount)) },
+          requests: { increment: 1 },
+        },
+        select: { id: true },
+      });
+
+      await tx.revenueDayPayer.upsert({
+        where: { revenueDayId_label: { revenueDayId: day.id, label: input.label } },
+        create: {
+          revenueDayId: day.id,
+          label: input.label,
+          amount: usdc6(dec(input.amount)),
+          requests: 1,
+        },
+        update: {
+          amount: { increment: usdc6(dec(input.amount)) },
+          requests: { increment: 1 },
+        },
+      });
+
+      await this.recomputeWindow(tx, input.borrowerId);
+    });
+  }
+
   private result(
     input: IngestRevenueDto,
     excluded: number,

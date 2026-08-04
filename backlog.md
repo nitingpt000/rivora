@@ -593,6 +593,48 @@ script now reads `deployments/arc-testnet.json`.
 
 ---
 
+## ~~15. Revenue was never originated, only ingested~~ — closed
+
+PRD §36 criterion 1 and §35.4 both ask for an x402-compatible paid API, and
+there was none. Revenue arrived through `POST /ingest/revenue` — real
+ingestion, simulated origination. It stayed open because every request until
+now was about the *lender*, and the paid endpoint is the *borrower's*
+service.
+
+`GET /api/v1/x402/quote` now charges for itself. An unpaid request gets a
+**402** with an x402 challenge; a retry carrying an `X-PAYMENT` header is
+verified and served. What is real: the challenge, the EIP-3009
+`TransferWithAuthorization` signature check, single-use nonces, and the
+revenue landing in the underwriting window through the same ingestion path
+an indexer would use.
+
+What is not real, stated in the code rather than implied: **settlement**.
+Gateway batches authorizations and settles them onchain; a seller serves on
+the strength of the signature, which is the premise nanopayments rest on and
+is not the same as money having moved.
+
+**Verified live**: four purchases by `apps/api/scripts/x402-agent.mjs`, each
+402 → sign → 200; a replayed authorization refused with `nonce_used`;
+takings 4 requests / 0.16 USDC / 1 payer, paid to the deployed **Revenue
+Router**. The revenue reached `RevenueDay` as 0.16 across 4 requests, and
+the payer appears on the revenue surface as `payer-x51a2ac` while the wallet
+stays in `X402Payment` (PRD §21).
+
+**Two things this exposed.** The seeded `routerAddress` was `0x7f3a…c1d2` —
+a truncated *display* string, fine on a screen and unusable as a payment
+destination. The endpoint advertised it, and every agent failed at the
+signing step with an error about the address rather than about the seller.
+The seed now carries the real router, and the service refuses to sell at all
+rather than advertise an unpayable `payTo`.
+
+Ingestion also needed a second write path. The batch path *replaces* a day,
+because a re-posted indexer batch is a corrected reading; a live payment is
+one more event on a day in progress, so `recordPayment` increments.
+Collapsing the two would make either a retried batch double-count or a
+second payment erase the first.
+
+---
+
 ## Smaller items
 
 - **The endpoint probe reports against stored state.** `verifyEndpoint` returns

@@ -10,5 +10,6 @@ import { IngestService } from './ingest.service';
   imports: [AssessmentModule, LedgerModule, DetectionModule],
   controllers: [IngestController],
   providers: [IngestService],
+  exports: [IngestService],
 })
 export class IngestModule {}

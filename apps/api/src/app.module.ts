@@ -16,6 +16,7 @@ import { loadConfig } from './config/configuration';
 import { CreditModule } from './credit/credit.module';
 import { HealthModule } from './health/health.module';
 import { IngestModule } from './ingest/ingest.module';
+import { X402Module } from './x402/x402.module';
 import { LedgerModule } from './ledger/ledger.module';
 import { PartnerModule } from './partner/partner.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -61,6 +62,7 @@ import { VaultModule } from './vault/vault.module';
     SettlementModule,
     HealthModule,
     IngestModule,
+    X402Module,
   ],
   providers: [
     /**

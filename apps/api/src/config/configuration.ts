@@ -58,6 +58,8 @@ export interface AppConfig {
    * grows as borrowers onboard rather than at deployment.
    */
   arcRevenueRouters: Record<string, string>;
+  /** USDC on Arc. The EIP-712 verifying contract for x402 authorizations. */
+  usdcAddress: string;
   /**
    * Circle Developer-Controlled Wallet credentials — the protocol signer in
    * arc mode. All three are required there and unused in ledger mode. The
@@ -155,6 +157,7 @@ export function loadConfig(): AppConfig {
       : null,
     arcIndexerIntervalMs: Number(process.env.ARC_INDEXER_INTERVAL_MS ?? 15_000),
     arcRevenueRouters: parseRouters(process.env.ARC_REVENUE_ROUTERS),
+    usdcAddress: process.env.USDC_ADDRESS ?? '0x3600000000000000000000000000000000000000',
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',

@@ -24,7 +24,11 @@ const BORROWER = {
   category: 'Data lookup and static datasets',
   endpoint: 'https://api.quotestream.dev/v1',
   endpointHash: '0x3b7d…e922',
-  routerAddress: '0x7f3a…c1d2',
+  // The real Revenue Router deployed for this borrower. It was a truncated
+  // display string, which is fine on a screen and unusable as a payment
+  // destination — the paid API advertised it as `payTo` and every agent that
+  // tried to sign against it failed on an invalid address.
+  routerAddress: '0xeefda804d1f8ce675479d3b935e34b2052863685',
   operatingWallet: '0x2b18…9e04',
   ownerWallet: '0x5d92…3ba6',
   operator: 'QuoteStream Labs Ltd',

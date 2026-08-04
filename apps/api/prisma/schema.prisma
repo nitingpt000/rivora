@@ -92,6 +92,7 @@ model Borrower {
   upstream      UpstreamDependency[]
   anomalies     Anomaly[]
   declarations  DefaultDeclaration[]
+  x402Payments  X402Payment[]
 
   @@index([handle])
 }
@@ -772,4 +773,32 @@ model ChainEvent {
 
   @@unique([txHash, logIndex])
   @@index([reconciled])
+}
+
+/// One x402 payment authorization the paid API accepted.
+///
+/// Exists for replay protection above all: EIP-3009 nonces are single-use,
+/// and a seller that forgets them serves the resource repeatedly for one
+/// payment. Also the raw record behind the revenue the underwriter reads —
+/// a payment that produced a request is evidence in a way an aggregate is
+/// not.
+model X402Payment {
+  id         String   @id @default(cuid())
+  borrowerId String
+  borrower   Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  /// Payer wallet, lowercased. Never leaves this table — the revenue surfaces
+  /// carry a pseudonym instead, per PRD §21.
+  payer  String
+  amount Decimal @db.Decimal(20, 6)
+
+  /// The EIP-3009 nonce. Unique globally: the same authorization must not be
+  /// spendable against two resources either.
+  nonce       String   @unique
+  validBefore DateTime
+  resource    String
+  at          DateTime @default(now())
+
+  @@index([borrowerId, at(sort: Desc)])
+  @@index([payer])
 }
