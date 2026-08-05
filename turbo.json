@@ -9,7 +9,6 @@
    */
   "globalEnv": [
     "NODE_ENV",
-    "ANTHROPIC_API_KEY",
     "API_BASE_URL",
     "ARC_CHAIN_ID",
     "ARC_INDEXER_FROM_BLOCK",
@@ -26,6 +25,8 @@
     "DATABASE_URL",
     "DEV_SESSIONS",
     "EXPLANATION_MODEL",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_URL",
     "RISK_REGISTRY_ADDRESS",
     "JWT_SECRET",
     "JWT_TTL_SECONDS",

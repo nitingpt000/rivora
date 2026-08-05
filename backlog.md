@@ -685,6 +685,15 @@ absent and every surface falls back to the ladder, which is the actual
 record. An underwriting decision must not depend on a third party being
 reachable, so a failure loses a sentence rather than a decision.
 
+Routed through **OpenRouter** rather than a single vendor's SDK. One key
+reaches many models, so changing which one narrates is a config change
+instead of a dependency change — and the protocol should not be coupled to
+one inference provider for a cosmetic feature. The API is OpenAI-compatible,
+so `fetch` is the entire client and there is no SDK in the dependency tree at
+all. `EXPLANATION_MODEL` must be a slug OpenRouter serves; one they do not
+comes back 400 and the explanation is simply absent, logged rather than
+silent.
+
 **Onboarding** (§22.1). Registration accepted only a service name, category,
 endpoint and custody model; the operating wallet was silently the connecting
 wallet and there was no revenue wallet at all. Both are now settable at

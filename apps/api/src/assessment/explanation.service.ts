@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { AssessmentResult } from './assessment.service';
@@ -22,26 +22,31 @@ import type { AssessmentResult } from './assessment.service';
  * that names the specific thing to fix. The ladder remains the record; this
  * is a reading of it.
  *
+ * ## Why OpenRouter, over plain HTTP
+ *
+ * One key reaches many models, so which one narrates is a config change
+ * rather than a dependency change — and the protocol should not be coupled
+ * to a single inference vendor for a cosmetic feature. The API is
+ * OpenAI-compatible, so `fetch` is the whole client; an SDK would be a
+ * supply-chain dependency bought for nothing.
+ *
  * ## When it is absent
  *
- * No API key, an error, a timeout — the explanation is simply missing and
- * every surface falls back to the ladder, which never needed it. An
- * underwriting decision must not depend on a third party being reachable.
+ * No API key, an unknown model slug, an error, a timeout — the explanation is
+ * simply missing and every surface falls back to the ladder, which never
+ * needed it. An underwriting decision must not depend on a third party being
+ * reachable.
  */
 
 /** Bounded so a slow provider cannot hold an assessment open. */
 const TIMEOUT_MS = 12_000;
 const MAX_TOKENS = 350;
 
-interface AnthropicClient {
-  messages: {
-    create(body: {
-      model: string;
-      max_tokens: number;
-      system: string;
-      messages: { role: 'user'; content: string }[];
-    }): Promise<{ content: { type: string; text?: string }[] }>;
-  };
+const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+
+interface ChatCompletion {
+  choices?: { message?: { content?: string } }[];
+  error?: { message?: string };
 }
 
 const SYSTEM = [
@@ -63,11 +68,21 @@ export class ExplanationService {
   private readonly logger = new Logger(ExplanationService.name);
   private readonly apiKey: string;
   private readonly model: string;
-  private client: AnthropicClient | null = null;
+  private readonly endpoint: string;
 
-  constructor(config: ConfigService) {
-    this.apiKey = config.get<string>('anthropicApiKey') ?? '';
-    this.model = config.get<string>('explanationModel') ?? 'claude-sonnet-5';
+  constructor(
+    config: ConfigService,
+    /**
+     * The transport. A test seam, never provided by Nest — the token exists
+     * so a spec can hand in a fake without a network. Without `@Optional`
+     * the container tries to resolve `fetch` as a provider and the whole
+     * app fails to boot.
+     */
+    @Optional() @Inject('EXPLANATION_FETCH') private readonly fetchImpl: typeof fetch = fetch,
+  ) {
+    this.apiKey = config.get<string>('openRouterApiKey') ?? '';
+    this.model = config.get<string>('explanationModel') ?? 'anthropic/claude-sonnet-4.5';
+    this.endpoint = config.get<string>('openRouterUrl') ?? ENDPOINT;
   }
 
   get configured(): boolean {
@@ -84,38 +99,49 @@ export class ExplanationService {
     if (!this.configured) return null;
 
     try {
-      const client = await this.connect();
-      const response = await Promise.race([
-        client.messages.create({
+      const response = await this.fetchImpl(this.endpoint, {
+        method: 'POST',
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: {
+          authorization: `Bearer ${this.apiKey}`,
+          'content-type': 'application/json',
+          // OpenRouter attributes usage to a referring app. Neither is
+          // required; both are what stops this looking like an unknown
+          // client on somebody's dashboard.
+          'HTTP-Referer': 'https://rivora.credit',
+          'X-Title': 'Rivora',
+        },
+        body: JSON.stringify({
           model: this.model,
           max_tokens: MAX_TOKENS,
-          system: SYSTEM,
-          messages: [{ role: 'user', content: prompt(result, handle) }],
+          messages: [
+            { role: 'system', content: SYSTEM },
+            { role: 'user', content: prompt(result, handle) },
+          ],
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('timed out')), TIMEOUT_MS),
-        ),
-      ]);
+      });
 
-      const text = response.content
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('')
-        .trim();
+      if (!response.ok) {
+        // A wrong model slug lands here as a 400. Worth saying out loud:
+        // silence would read as "no explanation configured".
+        this.logger.warn(
+          `no explanation for ${handle}: ${response.status} from OpenRouter (model "${this.model}")`,
+        );
+        return null;
+      }
 
+      const body = (await response.json()) as ChatCompletion;
+      if (body.error) {
+        this.logger.warn(`no explanation for ${handle}: ${body.error.message ?? 'provider error'}`);
+        return null;
+      }
+
+      const text = body.choices?.[0]?.message?.content?.trim() ?? '';
       return text.length > 0 ? text : null;
     } catch (cause) {
       this.logger.warn(`no explanation for ${handle}: ${String(cause)}`);
       return null;
     }
-  }
-
-  private async connect(): Promise<AnthropicClient> {
-    if (!this.client) {
-      const { default: Anthropic } = await import('@anthropic-ai/sdk');
-      this.client = new Anthropic({ apiKey: this.apiKey }) as unknown as AnthropicClient;
-    }
-    return this.client;
   }
 }
 

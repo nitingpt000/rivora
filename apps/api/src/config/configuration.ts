@@ -61,11 +61,17 @@ export interface AppConfig {
   /** USDC on Arc. The EIP-712 verifying contract for x402 authorizations. */
   usdcAddress: string;
   /**
-   * Narrates an assessment after it is decided. Optional throughout: with no
-   * key the explanation is absent and every surface falls back to the
-   * constraint ladder, which is the actual record.
+   * Narrates an assessment after it is decided, through OpenRouter — one key
+   * reaches many models, so which one narrates is a config change rather
+   * than a dependency change. Optional throughout: with no key the
+   * explanation is absent and every surface falls back to the constraint
+   * ladder, which is the actual record.
    */
-  anthropicApiKey: string;
+  openRouterApiKey: string;
+  openRouterUrl: string;
+  /** OpenRouter model slug — must match their catalogue, e.g.
+   * `anthropic/claude-sonnet-4.5`. A slug they do not serve comes back 400
+   * and the explanation is simply absent. */
   explanationModel: string;
   /**
    * Circle Developer-Controlled Wallet credentials — the protocol signer in
@@ -165,8 +171,10 @@ export function loadConfig(): AppConfig {
     arcIndexerIntervalMs: Number(process.env.ARC_INDEXER_INTERVAL_MS ?? 15_000),
     arcRevenueRouters: parseRouters(process.env.ARC_REVENUE_ROUTERS),
     usdcAddress: process.env.USDC_ADDRESS ?? '0x3600000000000000000000000000000000000000',
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    explanationModel: process.env.EXPLANATION_MODEL ?? 'claude-sonnet-5',
+    openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+    openRouterUrl:
+      process.env.OPENROUTER_URL ?? 'https://openrouter.ai/api/v1/chat/completions',
+    explanationModel: process.env.EXPLANATION_MODEL ?? 'anthropic/claude-sonnet-4.5',
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',
