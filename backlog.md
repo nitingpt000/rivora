@@ -737,10 +737,19 @@ before it is a UI one.
 
 ## Smaller items
 
-- **The endpoint probe reports against stored state.** `verifyEndpoint` returns
-  a staged log built from what the database already knows rather than making a
-  live outbound request. The network probe needs egress rules and a timeout
-  budget before it can run in production; the function's docstring says so.
+- ~~**The endpoint probe reports against stored state.**~~ — closed. It makes
+  a real request now, refuses private address ranges before one leaves, and
+  writes its verdict to `bindingOk`. See item 13.
+- **Uptime and routed coverage are still fixtures.** `ServiceHealth.uptimePct`
+  and `coverageRatio` feed the score and are written only by the seed.
+  Uptime needs a monitoring loop the protocol does not run — the endpoint
+  probe observes one moment, not availability over time. Coverage needs
+  routed revenue measured against total, which only becomes meaningful once
+  the router is the sole path revenue takes.
+- **Router deployment is a script, not an onboarding step.** The wizard's
+  `deployRouter` remains a local flag. Making it real needs the deploy to run
+  under the borrower's own credentials rather than the protocol's, which is a
+  custody question before it is a UI one.
 - **Subsidy paid-in is approximated.** `VaultService.economics` computes it
   from the current rate over current assets rather than from booked subsidy
   payments, because subsidy payments are not ledger rows yet.
