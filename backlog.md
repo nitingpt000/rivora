@@ -694,6 +694,22 @@ all. `EXPLANATION_MODEL` must be a slug OpenRouter serves; one they do not
 comes back 400 and the explanation is simply absent, logged rather than
 silent.
 
+**Reasoning models need room, and the first symptom is silence.** Running
+this against `qwen/qwen3.7-flash` produced a 200 with `content: null` and
+`finish_reason: "length"` — a successful call containing nothing, which
+looked exactly like "no key configured". The token budget was 350, sized for
+the three sentences the prompt asks for; the model spent all of it thinking.
+Measured rather than guessed: a trivial prompt finishes on ~1,000 reasoning
+tokens, the real one — whole ladder plus score components — needs well past
+2,000, so the ceiling is 8,000. Output length is still governed by the
+prompt. An empty completion now logs `finish_reason` and whether reasoning
+was present, so this can never be silent again.
+
+The borrower's own credit screen recomputes the ladder live while the
+narration belongs to the last *decision*. It is attached only when the two
+limits agree — a sentence describing a limit that no longer holds, shown
+beside the new figure, would be worse than no sentence.
+
 **Onboarding** (§22.1). Registration accepted only a service name, category,
 endpoint and custody model; the operating wallet was silently the connecting
 wallet and there was no revenue wallet at all. Both are now settable at

@@ -39,13 +39,32 @@ import type { AssessmentResult } from './assessment.service';
  */
 
 /** Bounded so a slow provider cannot hold an assessment open. */
-const TIMEOUT_MS = 12_000;
-const MAX_TOKENS = 350;
+const TIMEOUT_MS = 30_000;
+
+/**
+ * Generous, because reasoning models spend most of a budget thinking.
+ *
+ * This was 350 — sized for the three sentences the system prompt asks for,
+ * which is what a non-reasoning model would need. A reasoning model given
+ * 350 tokens produces 350 tokens of private reasoning, `content: null`, and
+ * `finish_reason: "length"`: a successful call containing nothing.
+ *
+ * Measured rather than guessed. Against `qwen/qwen3.7-flash`, a trivial
+ * prompt finished on ~1,000 reasoning tokens; the real prompt — the whole
+ * ladder plus the score components — reasons well past 2,000. Reasoning
+ * length scales with how much there is to read, so the ceiling has to clear
+ * the largest prompt rather than the smallest. Output stays three sentences
+ * because the system prompt says so, not because the budget is tight.
+ */
+const MAX_TOKENS = 8_000;
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface ChatCompletion {
-  choices?: { message?: { content?: string } }[];
+  choices?: {
+    message?: { content?: string | null; reasoning?: string | null };
+    finish_reason?: string;
+  }[];
   error?: { message?: string };
 }
 
@@ -114,6 +133,17 @@ export class ExplanationService {
         body: JSON.stringify({
           model: this.model,
           max_tokens: MAX_TOKENS,
+          /**
+           * There is nothing here to reason about.
+           *
+           * The limit, the score and the binding rung are settled before
+           * this request is made; the task is to describe them. A reasoning
+           * model left to itself spends the whole budget deliberating and
+           * returns `content: null` with `finish_reason: "length"` — a
+           * successful call containing nothing. Providers that do not
+           * reason ignore this field.
+           */
+          reasoning: { effort: 'low' },
           messages: [
             { role: 'system', content: SYSTEM },
             { role: 'user', content: prompt(result, handle) },
@@ -136,8 +166,28 @@ export class ExplanationService {
         return null;
       }
 
-      const text = body.choices?.[0]?.message?.content?.trim() ?? '';
-      return text.length > 0 ? text : null;
+      const choice = body.choices?.[0];
+      const text = choice?.message?.content?.trim() ?? '';
+
+      if (text.length === 0) {
+        /**
+         * A 200 with nothing in it. The usual cause is a reasoning model
+         * exhausting `max_tokens` before it says anything — `finish_reason`
+         * is `length` and the words are all in `reasoning`.
+         *
+         * Said out loud rather than returned as a quiet null: this looked
+         * exactly like "no explanation configured" for a while, which sent
+         * me looking at the key instead of at the token budget.
+         */
+        this.logger.warn(
+          `no explanation for ${handle}: the model returned no content (finish_reason: ${choice?.finish_reason ?? 'unknown'}${
+            choice?.message?.reasoning ? ', reasoning present' : ''
+          }). Raise MAX_TOKENS or choose a non-reasoning model.`,
+        );
+        return null;
+      }
+
+      return text;
     } catch (cause) {
       this.logger.warn(`no explanation for ${handle}: ${String(cause)}`);
       return null;

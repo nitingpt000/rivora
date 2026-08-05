@@ -449,13 +449,35 @@ export class BorrowerService {
     const borrower = await this.forSession(user);
     const result = await this.assessments.compute(borrower);
 
+    /**
+     * The narration belongs to the last *decision*; the ladder above is
+     * recomputed live. Usually they agree, and when they do the prose is a
+     * reading of exactly what is on screen.
+     *
+     * When they disagree — inputs moved since the assessment, so today's
+     * ladder produces a different limit — the stored sentence describes a
+     * decision that no longer holds, and showing it beside the new figure
+     * would be worse than showing nothing. So it is attached only when the
+     * limits match.
+     */
+    const latest = await this.prisma.assessment.findFirst({
+      where: { borrowerId: borrower.id },
+      orderBy: { at: 'desc' },
+      select: { explanation: true, limitAmount: true },
+    });
+
+    const explanation =
+      latest?.explanation && Math.abs(toNumber(latest.limitAmount) - result.limit) < 0.005
+        ? latest.explanation
+        : undefined;
+
     return {
       score: result.score,
       tier: result.tier,
       limit: result.limit,
       previousLimit: result.previousLimit,
       bindingKey: result.bindingKey,
-      ...(result.explanation ? { explanation: result.explanation } : {}),
+      ...(explanation ? { explanation } : {}),
       ladder: result.ladder as AssessmentDto['ladder'],
       penalties: result.penalties,
       components: result.components,
