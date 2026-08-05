@@ -407,7 +407,7 @@ and lending against it are different questions.
 
 ---
 
-## 13. A PRD audit found working screens over logic that was never built
+## ~~13. A PRD audit found working screens over logic that was never built~~ — closed
 
 Every entry above item 12 was something I noticed while building. This one
 came from auditing [PRD.md](PRD.md) section by section against the code, and
@@ -500,9 +500,9 @@ was permitted while nothing checked.
 
 ---
 
-## 14. The Revenue Router is built and unbound
+## ~~14. The Revenue Router is built and unbound~~ — closed, routing onchain
 
-Everything code-side exists: the contract, a per-borrower deployment script
+Everything code-side existed: the contract, a per-borrower deployment script
 (`circle:deploy-router`), `ARC_REVENUE_ROUTERS` configuration, and
 `distributeRevenue` calling the real thing instead of refusing. It has not
 been run, because the last step needs a key that deliberately does not live
