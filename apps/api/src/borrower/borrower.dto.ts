@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   IsArray,
+  IsEthereumAddress,
   IsIn,
   IsNumber,
   IsOptional,
@@ -608,6 +609,24 @@ export class RegisterServiceDto {
   @IsNumber({ maxDecimalPlaces: 6 })
   @Min(0)
   pricePerRequest?: number;
+
+  @ApiPropertyOptional({
+    example: '0x2b18000000000000000000000000000000009e04',
+    description:
+      'Where draws are paid. Defaults to the connecting wallet. Distinct from the owner wallet on purpose: the operating wallet is what the agent spends from day to day, and the owner wallet is what authorises changes to the arrangement — a service that keeps them separate can rotate the spending key without renegotiating its credit.',
+  })
+  @IsOptional()
+  @IsEthereumAddress()
+  operatingWallet?: string;
+
+  @ApiPropertyOptional({
+    example: '0x5d92000000000000000000000000000000003ba6',
+    description:
+      'Where settled revenue arrives before the router splits it. Defaults to the connecting wallet.',
+  })
+  @IsOptional()
+  @IsEthereumAddress()
+  revenueWallet?: string;
 }
 
 export class VerifyEndpointDto {

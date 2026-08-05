@@ -537,6 +537,18 @@ export const useProtocol = create<SimStore>()((set, get) => {
           category: onboarding.category,
           endpoint: onboarding.endpoint,
           custody: onboarding.custody,
+          // Omitted rather than sent blank: the server reads absence as "use
+          // the connecting wallet", and an empty string would fail address
+          // validation instead.
+          ...(onboarding.operatingWallet ? { operatingWallet: onboarding.operatingWallet } : {}),
+          ...(onboarding.revenueWallet ? { revenueWallet: onboarding.revenueWallet } : {}),
+          ...(onboarding.operator === 'named' && onboarding.entity
+            ? { operator: onboarding.entity }
+            : {}),
+          ...(onboarding.jurisdiction ? { jurisdiction: onboarding.jurisdiction } : {}),
+          ...(Number(onboarding.pricePerRequest) > 0
+            ? { pricePerRequest: Number(onboarding.pricePerRequest) }
+            : {}),
         });
 
         set((s) => ({

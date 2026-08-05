@@ -630,8 +630,14 @@ export class BorrowerService {
           category: input.category,
           endpoint: input.endpoint,
           custody: (input.custody ?? 'A') as 'A' | 'B' | 'C',
-          operatingWallet: user.address,
+          // The connecting wallet is the owner: it signed in, so it is what
+          // authorises changes to the arrangement. The operating and revenue
+          // wallets default to it and can be separated at registration —
+          // keeping them distinct lets a service rotate the key its agent
+          // spends from without renegotiating its credit.
+          operatingWallet: input.operatingWallet ?? user.address,
           ownerWallet: user.address,
+          revenueWallet: input.revenueWallet ?? user.address,
           operator: input.operator ?? null,
           jurisdiction: input.jurisdiction ?? null,
           creditLine: { create: { status: 'OBSERVATION', tier: 'Standard' } },

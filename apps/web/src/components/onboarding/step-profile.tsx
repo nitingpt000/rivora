@@ -2,6 +2,7 @@
 
 import { COST_BANDS } from '@rivora/core';
 import { useProtocol } from '@rivora/protocol-sim';
+import { shortenAddress, useWallet } from '@rivora/wallet';
 import {
   Blueprint,
   Button,
@@ -20,6 +21,7 @@ import { useRouter } from 'next/navigation';
 export function StepProfile({ onNext }: { onNext: () => void; onBack: () => void }) {
   const ob = useProtocol((s) => s.onboarding);
   const set = useProtocol((s) => s.setOnboarding);
+  const { address, balance } = useWallet();
   const router = useRouter();
 
   const canContinue = ob.serviceName.trim().length > 0 && ob.category.length > 0;
@@ -39,16 +41,21 @@ export function StepProfile({ onNext }: { onNext: () => void; onBack: () => void
           flexWrap: 'wrap',
         }}
       >
-        <span style={{ color: 'var(--color-ok)' }}>●</span>
+        <span style={{ color: address ? 'var(--color-ok)' : 'var(--color-warn)' }}>●</span>
         <div style={{ flex: 1, minWidth: 180 }}>
-          <Mono size={13}>0x5d92…3ba6</Mono>
+          <Mono size={13}>{address ? shortenAddress(address) : 'No wallet connected'}</Mono>
           <div style={{ fontSize: 12, color: 'var(--color-neutral-600)' }}>
-            Circle Wallet · Arc Testnet · 42.10 USDC
+            {/*
+              The real balance, read from the chain. This was the literal
+              string "Circle Wallet · Arc Testnet · 42.10 USDC" — a figure
+              that belonged to nobody, shown at the moment a provider is
+              deciding whether they can afford to proceed.
+            */}
+            {address
+              ? `Arc Testnet · ${balance ?? 'reading balance…'}`
+              : 'Connect a wallet to register a service'}
           </div>
         </div>
-        <Button variant="ghost" compact>
-          Change wallet
-        </Button>
       </div>
 
       <Kicker style={{ marginBottom: 12 }}>Service profile</Kicker>

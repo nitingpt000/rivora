@@ -669,6 +669,47 @@ revenue arrives.
 
 ---
 
+## ~~17. The last two PRD gaps~~ — closed
+
+**AI-generated decision explanation** (§35.4). There was none, and the
+deterministic constraint ladder stood in for it. Now
+[explanation.service.ts](apps/api/src/assessment/explanation.service.ts)
+narrates a decided assessment in plain language — after the limit is
+computed, stored and enforced.
+
+§6.5 is the governing constraint: *AI may analyse risk, but deterministic
+policies must control funds.* So the wiring, not the prompt, is what makes
+this safe — the model receives a settled outcome and the only thing written
+back is prose. It is optional throughout: with no key the explanation is
+absent and every surface falls back to the ladder, which is the actual
+record. An underwriting decision must not depend on a third party being
+reachable, so a failure loses a sentence rather than a decision.
+
+**Onboarding** (§22.1). Registration accepted only a service name, category,
+endpoint and custody model; the operating wallet was silently the connecting
+wallet and there was no revenue wallet at all. Both are now settable at
+registration and validated as addresses, defaulting to the connecting wallet
+when omitted. Keeping them distinct is the point: the operating wallet is
+what the agent spends from, the owner wallet authorises changes, and a
+service can rotate the first without renegotiating its credit.
+
+The onboarding screen also showed `Circle Wallet · Arc Testnet · 42.10 USDC`
+as a literal string — a balance belonging to nobody, displayed at the moment
+a provider decides whether they can afford to proceed. It reads the connected
+wallet now, and says so plainly when none is connected.
+
+Verified live: a fresh wallet registered with distinct operating and revenue
+wallets, stored correctly with the owner wallet remaining the signer; a
+malformed address refused with `validation_failed`.
+
+**Still open from §22.1, and honestly:** router deployment is a script rather
+than a step in the wizard, and the wizard's `deployRouter` remains a local
+flag. Making it a real step needs the deploy path to run under a borrower's
+own credentials rather than the protocol's, which is a custody question
+before it is a UI one.
+
+---
+
 ## Smaller items
 
 - **The endpoint probe reports against stored state.** `verifyEndpoint` returns

@@ -50,10 +50,29 @@ export function StepCosts({ onBack }: { onNext: () => void; onBack: () => void }
 
   return (
     <Blueprint style={{ padding: '26px 30px' }}>
-      <Kicker style={{ marginBottom: 8 }}>Operating wallet</Kicker>
+      <Kicker style={{ marginBottom: 8 }}>Wallets</Kicker>
       <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: '0 0 10px' }}>
-        Destination for your 78% revenue share and for borrowed funds.
+        Settled revenue arrives at the revenue wallet and is split by the router; your share
+        reaches the operating wallet, which is also where borrowed funds are paid. Both default
+        to the wallet you signed in with — keeping them separate lets you rotate the key your
+        agent spends from without touching the one that authorises changes.
       </p>
+      <Stack gap={12} style={{ marginBottom: 18 }}>
+        <Field label="Operating wallet — leave blank to use the connected wallet">
+          <TextInput
+            value={ob.operatingWallet}
+            onChange={(v) => set('operatingWallet', v)}
+            placeholder={operatingWallet}
+          />
+        </Field>
+        <Field label="Revenue wallet — leave blank to use the connected wallet">
+          <TextInput
+            value={ob.revenueWallet}
+            onChange={(v) => set('revenueWallet', v)}
+            placeholder={operatingWallet}
+          />
+        </Field>
+      </Stack>
       <div
         style={{
           border: '1px solid var(--color-neutral-300)',

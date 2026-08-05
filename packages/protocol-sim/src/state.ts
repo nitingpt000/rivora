@@ -70,6 +70,10 @@ export interface OnboardingState {
   deployed: boolean;
   pricePerRequest: string;
   costPerRequest: string;
+  /** Where draws are paid. Blank means "use the connecting wallet". */
+  operatingWallet: string;
+  /** Where settled revenue arrives before the router splits it. */
+  revenueWallet: string;
   terms: [boolean, boolean, boolean, boolean];
   completed: boolean;
 }
@@ -385,6 +389,8 @@ export function initialState(): SimState {
       deployed: false,
       pricePerRequest: '',
       costPerRequest: '',
+      operatingWallet: '',
+      revenueWallet: '',
       terms: [false, false, false, false],
       completed: false,
     },

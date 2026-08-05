@@ -70,6 +70,10 @@ model Borrower {
   routerAddress   String?
   operatingWallet String
   ownerWallet     String
+  /// Where settled revenue arrives before the router splits it. Separate from
+  /// the operating wallet: revenue lands here and is divided, and what the
+  /// borrower keeps is what reaches the operating wallet afterwards.
+  revenueWallet   String?
   custody         CustodyModel @default(A)
   operator        String?
   jurisdiction    String?
