@@ -455,6 +455,7 @@ export class BorrowerService {
       limit: result.limit,
       previousLimit: result.previousLimit,
       bindingKey: result.bindingKey,
+      ...(result.explanation ? { explanation: result.explanation } : {}),
       ladder: result.ladder as AssessmentDto['ladder'],
       penalties: result.penalties,
       components: result.components,

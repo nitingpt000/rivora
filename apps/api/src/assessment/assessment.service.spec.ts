@@ -1,9 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { LedgerChainService } from '../chain/chain.service';
+import type { ExplanationService } from './explanation.service';
 import type { LedgerService } from '../ledger/ledger.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AssessmentService } from './assessment.service';
+
+/**
+ * The narrator, switched off. Every test here is about the arithmetic, and
+ * an assessment must produce the same numbers whether or not anything is
+ * available to describe them.
+ */
+function silentExplanations(): ExplanationService {
+  return { configured: false, explain: async () => null } as unknown as ExplanationService;
+}
 
 interface Day {
   settled: number;
@@ -58,7 +68,7 @@ function serviceWith(days: Day[]) {
   } as unknown as PrismaService;
 
   const ledger = { run: vi.fn(), nextTxHash: vi.fn() } as unknown as LedgerService;
-  return new AssessmentService(prisma, ledger, new LedgerChainService());
+  return new AssessmentService(prisma, ledger, new LedgerChainService(), silentExplanations());
 }
 
 /** A steady 30-day series summing to 13,500. */
@@ -169,7 +179,12 @@ describe('AssessmentService.dueForReassessment', () => {
       },
     } as unknown as PrismaService;
 
-    return new AssessmentService(prisma, {} as LedgerService, new LedgerChainService());
+    return new AssessmentService(
+      prisma,
+      {} as LedgerService,
+      new LedgerChainService(),
+      silentExplanations(),
+    );
   }
 
   it('is due when the interval has elapsed in settlement days', async () => {

@@ -123,6 +123,10 @@ model Assessment {
   /// The full ladder, as shown on the credit screen.
   ladder        Json
   model         String   @default("riv-uw-2.1")
+  /// Plain-language reading of the ladder above, written by a language model
+  /// after the decision was made and stored. Null when unconfigured or when
+  /// the call failed — the ladder is the record and never needed it.
+  explanation   String?
 
   @@index([borrowerId, at(sort: Desc)])
 }

@@ -18,6 +18,7 @@ import { ChainService } from '../chain/chain.service';
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ExplanationService } from './explanation.service';
 
 /** Settlement days between scheduled assessments. PRD §16.6. */
 export const ASSESSMENT_INTERVAL_DAYS = 14;
@@ -45,6 +46,8 @@ export interface AssessmentResult {
   quality: number;
   model: string;
   assessedAt: string;
+  /** Plain-language reading of the ladder. Absent when unconfigured. */
+  explanation?: string;
 }
 
 /**
@@ -67,6 +70,7 @@ export class AssessmentService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly chain: ChainService,
+    private readonly explanations: ExplanationService,
   ) {}
 
   /**
@@ -286,6 +290,28 @@ export class AssessmentService {
     });
 
     await this.exportToRegistry(borrowerId, handle, result);
+
+    /**
+     * The narration, last of all.
+     *
+     * After the limit is decided, stored and enforced — PRD §6.5 puts
+     * deterministic policy in control of funds, so the model describes an
+     * outcome it cannot influence. A failure here loses a sentence, not a
+     * decision, which is why nothing is awaited into the result.
+     */
+    const explanation = await this.explanations.explain(result, handle);
+    if (explanation) {
+      await this.prisma.assessment
+        .updateMany({
+          where: { borrowerId, at: { gte: new Date(Date.now() - 60_000) } },
+          data: { explanation },
+        })
+        .catch((cause: unknown) => {
+          this.logger.warn(`explanation for ${handle} not stored: ${String(cause)}`);
+        });
+      result.explanation = explanation;
+    }
+
     return result;
   }
 

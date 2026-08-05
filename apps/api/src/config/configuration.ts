@@ -61,6 +61,13 @@ export interface AppConfig {
   /** USDC on Arc. The EIP-712 verifying contract for x402 authorizations. */
   usdcAddress: string;
   /**
+   * Narrates an assessment after it is decided. Optional throughout: with no
+   * key the explanation is absent and every surface falls back to the
+   * constraint ladder, which is the actual record.
+   */
+  anthropicApiKey: string;
+  explanationModel: string;
+  /**
    * Circle Developer-Controlled Wallet credentials — the protocol signer in
    * arc mode. All three are required there and unused in ledger mode. The
    * entity secret is the key to the key: it never belongs in a compose file
@@ -158,6 +165,8 @@ export function loadConfig(): AppConfig {
     arcIndexerIntervalMs: Number(process.env.ARC_INDEXER_INTERVAL_MS ?? 15_000),
     arcRevenueRouters: parseRouters(process.env.ARC_REVENUE_ROUTERS),
     usdcAddress: process.env.USDC_ADDRESS ?? '0x3600000000000000000000000000000000000000',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
+    explanationModel: process.env.EXPLANATION_MODEL ?? 'claude-sonnet-5',
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',

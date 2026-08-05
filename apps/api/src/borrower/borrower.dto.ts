@@ -481,6 +481,14 @@ export class AssessmentDto {
   @ApiProperty({ example: 'growthCap', description: 'Which rung decided the limit.' })
   bindingKey: string;
 
+  @ApiPropertyOptional({
+    example:
+      'Your limit is held at 2,530 USDC by the growth cap rather than by your revenue…',
+    description:
+      'Plain-language reading of the ladder, written after the decision was made. Absent when unconfigured or when the call failed — the ladder below is the record and does not depend on it.',
+  })
+  explanation?: string;
+
   @ApiProperty({ type: [ConstraintDto], description: 'Every candidate limit, in display order.' })
   ladder: ConstraintDto[];
 

@@ -5,6 +5,7 @@ import { useDerived, useProtocol } from '@rivora/protocol-sim';
 import {
   Blueprint,
   Button,
+  Callout,
   Card,
   CheckLine,
   Grid,
@@ -65,6 +66,18 @@ export default function AssessmentPage() {
           Model riv-uw-2.1 · Evidence 0x2f81…7cd0 · Nonce 14 · Valid 24h
         </div>
       </Blueprint>
+
+      {s.assessment?.explanation ? (
+        <div style={{ marginBottom: 16 }}>
+        <Callout severity="info">
+          {s.assessment.explanation}
+          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--color-neutral-600)' }}>
+            Written after the decision, from the ladder below. It describes the outcome and had no
+            part in reaching it — the limit is set by the constraint ladder alone.
+          </div>
+        </Callout>
+        </div>
+      ) : null}
 
       <Grid cols={2} style={{ marginBottom: 16 }}>
         <Card kicker="Positive factors">

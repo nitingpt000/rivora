@@ -402,6 +402,8 @@ export interface AssessmentDetail {
   limit: number;
   previousLimit: number;
   bindingKey: string;
+  /** Plain-language reading of the ladder. Absent when unconfigured. */
+  explanation?: string;
   ladder: Constraint[];
   penalties: FactorPenaltyEntry[];
   components: ScoreComponent[];

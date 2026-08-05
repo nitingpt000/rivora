@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { LedgerModule } from '../ledger/ledger.module';
 import { AssessmentService } from './assessment.service';
+import { ExplanationService } from './explanation.service';
 
 /**
  * The underwriter, shared.
@@ -12,7 +13,7 @@ import { AssessmentService } from './assessment.service';
  */
 @Module({
   imports: [LedgerModule],
-  providers: [AssessmentService],
+  providers: [AssessmentService, ExplanationService],
   exports: [AssessmentService],
 })
 export class AssessmentModule {}
