@@ -44,7 +44,7 @@ export class DetectionService {
    */
   async evaluate(
     borrowerId: string,
-    prior: { eligible: number; hhi: number; successPct: number },
+    prior: { eligible: number; hhi: number; successPct: number; coverageRatio: number },
   ): Promise<Finding | null> {
     const borrower = await this.prisma.borrower.findUnique({
       where: { id: borrowerId },
@@ -70,6 +70,8 @@ export class DetectionService {
       gross: toNumber(window.gross),
       successPct: borrower.health.successPct,
       priorSuccessPct: prior.successPct,
+      coverageRatio: borrower.health.coverageRatio,
+      priorCoverageRatio: prior.coverageRatio,
       ...wash,
     };
 

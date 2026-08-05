@@ -740,12 +740,28 @@ before it is a UI one.
 - ~~**The endpoint probe reports against stored state.**~~ — closed. It makes
   a real request now, refuses private address ranges before one leaves, and
   writes its verdict to `bindingOk`. See item 13.
-- **Uptime and routed coverage are still fixtures.** `ServiceHealth.uptimePct`
-  and `coverageRatio` feed the score and are written only by the seed.
-  Uptime needs a monitoring loop the protocol does not run — the endpoint
-  probe observes one moment, not availability over time. Coverage needs
-  routed revenue measured against total, which only becomes meaningful once
-  the router is the sole path revenue takes.
+- **Uptime is still a fixture.** `ServiceHealth.uptimePct` feeds the score and
+  is written only by the seed. It needs a monitoring loop the protocol does
+  not run — the endpoint probe observes one moment, not availability over
+  time. That is an infrastructure decision, not a missing function.
+- ~~**Routed coverage is a fixture.**~~ — closed. `coverageRatio` is now
+  measured: `RevenueDay.routed` records the portion of a settled day that
+  arrived through the Revenue Router, `recomputeCoverage` divides routed by
+  settled across the reporting window, and the detector watchlists a borrower
+  below 0.90 or falling 5 points. Nullable like the reliability columns, for
+  the same reason — a service that never reports routing must not be scored
+  as though every cent were routed. x402 revenue is credited as routed by
+  construction, because the challenge names the router as `payTo`.
+
+  The indexer watches every configured router for `RevenueDistributed`, but
+  deliberately does not write `routed` from it: x402 credits the money when
+  it settles and the router distributes that same USDC afterwards, so both
+  writing would double-count, and the cap at 1.0 would hide the error. The
+  onchain events serve as the independent check instead — a coverage ratio no
+  distribution backs shows up as an unmatched event.
+
+  Verified against the running stack: ten days ingested at 20% routing moved
+  measured coverage 0.98 → 0.7146 and the borrower ACTIVE → WATCH.
 - **Router deployment is a script, not an onboarding step.** The wizard's
   `deployRouter` remains a local flag. Making it real needs the deploy to run
   under the borrower's own credentials rather than the protocol's, which is a

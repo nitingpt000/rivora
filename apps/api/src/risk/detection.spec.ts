@@ -21,6 +21,8 @@ function signals(overrides: Partial<DetectionSignals> = {}): DetectionSignals {
     gross: 14_040,
     successPct: 96.2,
     priorSuccessPct: 96.2,
+    coverageRatio: 0.98,
+    priorCoverageRatio: 0.98,
     ...overrides,
   };
 }
@@ -155,5 +157,33 @@ describe('failure rate', () => {
     // on a fixture.
     expect(detect(signals({ successPct: 0, priorSuccessPct: 0 }))).toEqual([]);
     expect(detect(signals({ successPct: 50, priorSuccessPct: 0 }))).toEqual([]);
+  });
+});
+
+describe('routed coverage — PRD §11.5', () => {
+  it('freezes draws when revenue stops arriving through the router', () => {
+    const findings = detect(signals({ coverageRatio: 0.62, priorCoverageRatio: 0.98 }));
+
+    expect(findings[0]).toMatchObject({ kind: 'coverage', action: 'watch' });
+    expect(findings[0]!.reason).toContain('62.0%');
+    expect(findings[0]!.reason).toContain('no longer structural');
+  });
+
+  it('freezes draws on a sharp fall even from a healthy level', () => {
+    const findings = detect(signals({ coverageRatio: 0.92, priorCoverageRatio: 0.99 }));
+
+    expect(findings[0]).toMatchObject({ kind: 'coverage' });
+    expect(findings[0]!.reason).toContain('fell 7.0 points');
+  });
+
+  it('ignores ordinary variation', () => {
+    expect(detect(signals({ coverageRatio: 0.97, priorCoverageRatio: 0.98 }))).toEqual([]);
+  });
+
+  it('says nothing when routing was never observed', () => {
+    // Coverage sits at its seeded value until something routes. Freezing
+    // draws over an unmeasured number would be acting on a fixture.
+    expect(detect(signals({ coverageRatio: 0, priorCoverageRatio: 0 }))).toEqual([]);
+    expect(detect(signals({ coverageRatio: 0.5, priorCoverageRatio: 0 }))).toEqual([]);
   });
 });

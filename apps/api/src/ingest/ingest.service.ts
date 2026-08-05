@@ -68,7 +68,8 @@ export class IngestService {
       .filter((payer) => payer.excluded)
       .reduce((sum, payer) => sum + payer.amount, 0);
 
-    const { replaced, eligibleBefore, hhiBefore, successBefore } = await this.ledger.run(async (tx) => {
+    const { replaced, eligibleBefore, hhiBefore, successBefore, coverageBefore } =
+      await this.ledger.run(async (tx) => {
       const existing = await tx.revenueDay.findUnique({
         where: { borrowerId_date: { borrowerId: borrower.id, date } },
         select: { id: true },
@@ -83,7 +84,7 @@ export class IngestService {
       // with itself.
       const healthBefore = await tx.serviceHealth.findUnique({
         where: { borrowerId: borrower.id },
-        select: { successPct: true },
+        select: { successPct: true, coverageRatio: true },
       });
 
       const day = await tx.revenueDay.upsert({
@@ -96,6 +97,7 @@ export class IngestService {
           requests: input.requests,
           failedRequests: input.failed ?? null,
           refunded: input.refunded === undefined ? null : usdc6(dec(input.refunded)),
+          routed: input.routed === undefined ? null : usdc6(dec(input.routed)),
         },
         // A corrected batch replaces the earlier reading. Adding to it would
         // double-count a retry, and a retry is the normal case for an indexer.
@@ -105,6 +107,7 @@ export class IngestService {
           requests: input.requests,
           failedRequests: input.failed ?? null,
           refunded: input.refunded === undefined ? null : usdc6(dec(input.refunded)),
+          routed: input.routed === undefined ? null : usdc6(dec(input.routed)),
         },
         select: { id: true },
       });
@@ -146,6 +149,7 @@ export class IngestService {
         eligibleBefore: toNumber(before?.eligible ?? 0),
         hhiBefore: before?.hhi ?? 0,
         successBefore: healthBefore?.successPct ?? 0,
+        coverageBefore: healthBefore?.coverageRatio ?? 0,
       };
     });
 
@@ -186,6 +190,7 @@ export class IngestService {
         eligible: eligibleBefore,
         hhi: hhiBefore,
         successPct: successBefore,
+        coverageRatio: coverageBefore,
       });
     } catch (cause) {
       this.logger.error(`detection failed for ${borrower.handle}: ${String(cause)}`);
@@ -225,10 +230,15 @@ export class IngestService {
           date,
           settled: usdc6(dec(input.amount)),
           requests: 1,
+          // An x402 payment is addressed to the Revenue Router in the
+          // challenge the seller served, so it routed by construction. This
+          // is the one place coverage is known rather than reported.
+          routed: usdc6(dec(input.amount)),
         },
         update: {
           settled: { increment: usdc6(dec(input.amount)) },
           requests: { increment: 1 },
+          routed: { increment: usdc6(dec(input.amount)) },
         },
         select: { id: true },
       });
@@ -318,6 +328,47 @@ export class IngestService {
           ? { refundRatePct: Math.round((refunded / settled) * 1000) / 10 }
           : {}),
       },
+    });
+  }
+
+  /**
+   * Routed-revenue coverage. PRD §11.5.
+   *
+   * The share of settled revenue that actually arrived through the Revenue
+   * Router. This is the number the whole arrangement rests on: repayment is
+   * structural only while revenue passes somewhere the protocol can take its
+   * share from, and coverage falling is the earliest sign it has found
+   * another way. The watchlist keys off it below 0.90.
+   *
+   * It was a seed fixture — 0.98, written once and never recomputed — so the
+   * earliest-warning signal was a constant. It is measurable now because the
+   * router is deployed and payments are addressed to it.
+   *
+   * Computed only over days that reported routing, for the same reason
+   * reliability is: a day that said nothing is silent, not diverted, and
+   * treating silence as zero would put an honest borrower on the watchlist
+   * the first time an indexer omitted a field.
+   */
+  private async recomputeCoverage(
+    tx: Prisma.TransactionClient,
+    borrowerId: string,
+    window: Array<{ settled: unknown; routed: unknown }>,
+  ): Promise<void> {
+    const reported = window.filter((day) => day.routed !== null);
+    if (reported.length === 0) return;
+
+    const settled = reported.reduce((sum, day) => sum + toNumber(day.settled as never), 0);
+    if (settled <= 0) return;
+
+    const routed = reported.reduce((sum, day) => sum + toNumber(day.routed as never), 0);
+
+    // Capped at 1: more routed than settled is a reporting inconsistency, not
+    // a borrower who routed 120% of their revenue.
+    const ratio = Math.min(1, routed / settled);
+
+    await tx.serviceHealth.update({
+      where: { borrowerId },
+      data: { coverageRatio: Math.round(ratio * 10_000) / 10_000 },
     });
   }
 
@@ -457,6 +508,7 @@ export class IngestService {
         requests: true,
         failedRequests: true,
         refunded: true,
+        routed: true,
       },
     });
 
@@ -475,6 +527,7 @@ export class IngestService {
 
     const rollup = await this.rebuildPayerSummaries(tx, borrowerId, window, eligible);
     await this.recomputeHealth(tx, borrowerId, window);
+    await this.recomputeCoverage(tx, borrowerId, window);
 
     await tx.revenueWindow.update({
       where: { borrowerId },

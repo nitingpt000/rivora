@@ -259,6 +259,16 @@ const EXCLUDED_PAYERS = [
 const SUCCESS_RATE = 0.962;
 const REFUND_RATE = 0.009;
 
+/**
+ * Routed coverage the health row asserts. PRD §11.5.
+ *
+ * Carried on the day rows for the same reason the failure counts are: the
+ * fixture has to be able to produce the figure it claims, or the first real
+ * ingestion recomputes coverage from one reported day against twenty-nine
+ * silent ones and contradicts it.
+ */
+const COVERAGE_RATIO = 0.98;
+
 const GROSS_30D = 14_040;
 const EXCLUDED_30D = 540;
 
@@ -562,7 +572,7 @@ async function main(): Promise<void> {
       },
       health: {
         create: {
-          coverageRatio: 0.98,
+          coverageRatio: COVERAGE_RATIO,
           uptimePct: 99.4,
           successPct: 96.2,
           refundRatePct: 0.9,
@@ -814,6 +824,7 @@ async function main(): Promise<void> {
       // that states 96.2% success has to carry the failures that make it so.
       failedRequests: Math.round((Math.round(settled / 0.04) / SUCCESS_RATE) * (1 - SUCCESS_RATE)),
       refunded: Math.round(settled * REFUND_RATE * 1_000_000) / 1_000_000,
+      routed: Math.round(settled * COVERAGE_RATIO * 1_000_000) / 1_000_000,
     })),
   });
 

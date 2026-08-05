@@ -571,6 +571,17 @@ model RevenueDay {
   failedRequests Int?
   refunded       Decimal? @db.Decimal(20, 6)
 
+  /// Portion of the day's settled revenue that arrived through the Revenue
+  /// Router. PRD §11.5 — coverage falling is the earliest sign revenue is
+  /// finding a way around the router, which is what the whole arrangement
+  /// rests on.
+  ///
+  /// Nullable for the same reason the reliability columns are: `0` means a
+  /// day whose revenue demonstrably did not route, `null` means nobody said.
+  /// Averaging silence in as zero would put an honest borrower on the
+  /// watchlist the first time an indexer omitted the field.
+  routed         Decimal? @db.Decimal(20, 6)
+
   payers RevenueDayPayer[]
 
   @@unique([borrowerId, date])

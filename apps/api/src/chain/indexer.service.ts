@@ -73,6 +73,19 @@ const EVENT_ABI = [
   'event StatusChanged(bytes32 indexed borrowerId, uint8 previous, uint8 current, string reason)',
   // RivoraRiskRegistry
   'event AssessmentRecorded(bytes32 indexed borrowerId, address indexed underwriter, uint256 riskScore, uint256 recommendedLimit, bytes32 evidenceHash, uint256 nonce)',
+  /**
+   * RivoraRevenueRouter — the attested side of routed coverage (PRD §11.5).
+   *
+   * Recorded and reconciled, deliberately not written back to
+   * `RevenueDay.routed`. x402 revenue is credited as routed the moment it is
+   * settled, because the challenge names the router as `payTo`; the router
+   * then distributes that same USDC later. Counting both would inflate
+   * coverage with money that arrived once, and the cap at 1.0 would hide it.
+   * What this does buy is independence: a claimed coverage ratio no
+   * distribution ever backs shows up here as an unmatched event.
+   */
+  'event RevenueDistributed(address indexed caller, uint256 amount, uint256 toRepayment, uint256 toReserve, uint256 toOperating)',
+  'event RoutingConfigured(address indexed creditVault, address indexed creditManager, address indexed operatingWallet, address reserveAccount, uint256 repaymentBps, uint256 reserveBps)',
 ];
 
 /**
@@ -91,6 +104,7 @@ const MONEY_EVENTS = new Set([
   'Drawn',
   'Repaid',
   'AssessmentRecorded',
+  'RevenueDistributed',
 ]);
 
 /** A hash the chain could actually know — not a ledger-mode stand-in. */
@@ -202,13 +216,25 @@ export class IndexerService implements OnApplicationBootstrap, OnApplicationShut
     this.fromBlock = configured != null ? BigInt(configured) : null;
     this.intervalMs = config.get<number>('arcIndexerIntervalMs') ?? 15_000;
 
+    // Every borrower's router as well as the three shared contracts. A
+    // router that is not watched is a borrower whose routed revenue nobody
+    // can see, which is the one figure the whole coverage control rests on.
+    const routers = Object.values(config.get<Record<string, string>>('arcRevenueRouters') ?? {});
+    const watched = [
+      config.get<string>('creditVaultAddress'),
+      config.get<string>('creditManagerAddress'),
+      config.get<string>('riskRegistryAddress'),
+      ...routers,
+    ]
+      .filter((address): address is string => Boolean(address))
+      .map((address) => address.toLowerCase());
+
     this.source =
       source ??
-      new RpcLogSource(config.get<string>('arcRpcUrl') ?? 'https://rpc.testnet.arc.io', [
-        config.get<string>('creditVaultAddress') as `0x${string}`,
-        config.get<string>('creditManagerAddress') as `0x${string}`,
-        config.get<string>('riskRegistryAddress') as `0x${string}`,
-      ]);
+      new RpcLogSource(
+        config.get<string>('arcRpcUrl') ?? 'https://rpc.testnet.arc.io',
+        [...new Set(watched)] as `0x${string}`[],
+      );
   }
 
   onApplicationBootstrap(): void {

@@ -29,9 +29,17 @@ export interface DetectionSignals {
   /** Share of paid requests fulfilled, after and before. */
   successPct: number;
   priorSuccessPct: number;
+  /** Share of settled revenue that arrived through the router, 0–1. */
+  coverageRatio: number;
+  priorCoverageRatio: number;
 }
 
-export type FindingKind = 'circular' | 'revenue_decline' | 'concentration' | 'failure_rate';
+export type FindingKind =
+  | 'circular'
+  | 'revenue_decline'
+  | 'concentration'
+  | 'failure_rate'
+  | 'coverage';
 
 export interface Finding {
   kind: FindingKind;
@@ -87,6 +95,20 @@ const SUCCESS_FLOOR = 90;
 
 /** Drop in fulfilment that is an event even from a healthy level. */
 const SUCCESS_DROP = 5;
+
+/**
+ * Routed coverage below which repayment has stopped being structural.
+ *
+ * PRD §11.5: revenue arriving anywhere other than the router is revenue the
+ * protocol cannot take its share from. This is the earliest signal of the
+ * failure the whole arrangement is designed against, which is why it freezes
+ * draws rather than merely noting it — the watchlist already surfaces the
+ * same threshold.
+ */
+const COVERAGE_FLOOR = 0.9;
+
+/** Fall in coverage that is an event even from a healthy level. */
+const COVERAGE_DROP = 0.05;
 
 export function detect(signals: DetectionSignals): Finding[] {
   const findings: Finding[] = [];
@@ -145,6 +167,27 @@ export function detect(signals: DetectionSignals): Finding[] {
         kind: 'failure_rate',
         action: 'watch',
         reason: `fulfilment fell ${dropped.toFixed(1)} points — ${signals.priorSuccessPct.toFixed(1)}% to ${signals.successPct.toFixed(1)}%`,
+      });
+    }
+  }
+
+  // Only when routing was observed at all. An unmeasured coverage ratio sits
+  // at whatever it was seeded with, and freezing draws over it would be
+  // acting on a fixture.
+  if (signals.coverageRatio > 0 && signals.priorCoverageRatio > 0) {
+    const fell = signals.priorCoverageRatio - signals.coverageRatio;
+
+    if (signals.coverageRatio < COVERAGE_FLOOR) {
+      findings.push({
+        kind: 'coverage',
+        action: 'watch',
+        reason: `only ${(signals.coverageRatio * 100).toFixed(1)}% of settled revenue arrived through the router — below the ${COVERAGE_FLOOR * 100}% floor, so repayment is no longer structural`,
+      });
+    } else if (fell >= COVERAGE_DROP) {
+      findings.push({
+        kind: 'coverage',
+        action: 'watch',
+        reason: `routed coverage fell ${(fell * 100).toFixed(1)} points — ${(signals.priorCoverageRatio * 100).toFixed(1)}% to ${(signals.coverageRatio * 100).toFixed(1)}%`,
       });
     }
   }

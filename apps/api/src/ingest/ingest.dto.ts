@@ -102,6 +102,16 @@ export class IngestRevenueDto {
   refunded?: number;
 
   @ApiPropertyOptional({
+    example: 441,
+    description:
+      'Portion of the settled total that arrived through the Revenue Router, USDC. Feeds the routed-coverage ratio (PRD §11.5). Omit rather than send zero when routing was not observed — absence is read as "not reported", and a zero would read as "diverted".',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(0)
+  routed?: number;
+
+  @ApiPropertyOptional({
     type: [IngestPayerDto],
     description:
       'Per-payer breakdown. Without it the day still counts toward revenue, but concentration and diversity cannot be recomputed from it.',
