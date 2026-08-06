@@ -1,7 +1,7 @@
 'use client';
 
 import { num, pct, usdc } from '@rivora/core';
-import { useDerived, useProtocol } from '@rivora/protocol-sim';
+import { useProtocol } from '@rivora/protocol-sim';
 import { Button } from '@rivora/ui';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -21,7 +21,6 @@ import styles from './landing.module.css';
  */
 export default function LandingPage() {
   const s = useProtocol();
-  const d = useDerived();
   const stats = s.stats;
   const economics = stats?.vault ?? null;
 
@@ -83,43 +82,60 @@ export default function LandingPage() {
           </p>
         </header>
 
+        {/* Every figure here comes from the public stats endpoint. The
+            flattened store state holds the *snapshot*, which needs a session —
+            reading it here showed signed-out visitors the bundled fixture
+            while the copy above promised them the book. */}
         <div className={styles.stateGrid}>
           <StateCell
             lead
             label="Total value locked"
-            value={figure(usdc(s.vaultAssets))}
+            value={figure(usdc(stats?.totalValueLocked ?? 0))}
             unit="USDC"
           />
           <StateCell
             lead
             label="Utilization"
-            value={figure(pct(d.utilization * 100, 1))}
-            meter={ready ? d.utilization : undefined}
+            value={figure(pct((stats?.utilization ?? 0) * 100, 1))}
+            meter={ready ? (stats?.utilization ?? 0) : undefined}
           />
-          <StateCell lead label="Realized losses" value={figure(usdc(s.realizedLosses))} unit="USDC" />
+          <StateCell
+            lead
+            label="Realized losses"
+            value={figure(usdc(stats?.realizedLosses ?? 0))}
+            unit="USDC"
+          />
 
           <StateCell
             small
             label="Outstanding credit"
-            value={figure(usdc(d.outstandingProtocolWide))}
+            value={figure(usdc(stats?.outstandingCredit ?? 0))}
             unit="USDC"
           />
-          <StateCell small label="Active borrowers" value={figure(String(s.activeBorrowers))} />
-          <StateCell small label="Default rate" value={figure('0.0%')} />
+          <StateCell
+            small
+            label="Active borrowers"
+            value={figure(String(stats?.activeBorrowers ?? 0))}
+          />
+          <StateCell small label="Default rate" value={figure(pct(stats?.defaultRatePct ?? 0, 1))} />
 
           <StateCell
             small
             label="Revenue routed 30d"
-            value={figure(usdc(s.routedRevenue30d))}
+            value={figure(usdc(stats?.routedRevenue30d ?? 0))}
             unit="USDC"
           />
           <StateCell
             small
             label="Principal repaid"
-            value={figure(usdc(s.principalRepaid))}
+            value={figure(usdc(stats?.principalRepaid ?? 0))}
             unit="USDC"
           />
-          <StateCell small label="Repaid from revenue" value={figure('100.0%')} />
+          <StateCell
+            small
+            label="Repaid from revenue"
+            value={figure(pct(stats?.repaidFromRevenuePct ?? 0, 1))}
+          />
         </div>
       </section>
 
