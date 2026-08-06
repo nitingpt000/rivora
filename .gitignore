@@ -31,6 +31,12 @@ contracts/cache
 contracts/broadcast
 contracts/lib/openzeppelin-contracts
 
+# Pitch deck build output. `deck/build.js` regenerates it from `assets/` and
+# `assets.js`, so the file is a product rather than a source — and a 3 MB
+# binary that changes wholesale on every rebuild is the worst thing to keep
+# in a git history.
+deck/*.pptx
+
 # logs
 *.log
 npm-debug.log*
