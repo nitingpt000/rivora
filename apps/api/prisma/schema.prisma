@@ -835,3 +835,72 @@ model X402Payment {
   @@index([borrowerId, at(sort: Desc)])
   @@index([payer])
 }
+
+/// An outbound webhook subscription. PRD §27.
+///
+/// Registered by an operator, since a delivery target sees protocol events
+/// as they commit — the same trust level as the risk console that displays
+/// them. The secret signs every delivery so the receiver can verify origin;
+/// it is generated server-side, shown once at registration and never again.
+model WebhookSubscription {
+  id     String  @id @default(cuid())
+  /// Delivery target. HTTPS and a public address, enforced at registration
+  /// and again at every delivery — a URL is data from outside the process
+  /// and re-validating at use is what makes a later DNS change harmless.
+  url    String
+  /// Which of the PRD §27 event types this subscription receives. Explicit
+  /// rather than defaulting to all: a receiver that asked for two events
+  /// should not start seeing a third because the protocol learned to emit it.
+  events String[]
+  /// HMAC-SHA256 key for the `x-rivora-signature` header.
+  secret String
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries WebhookDelivery[]
+}
+
+/// One protocol event captured for webhook delivery — the outbox.
+///
+/// Written in the same transaction as the domain change it reports, so an
+/// event exists if and only if the change committed. Delivery happens later
+/// and may fail; the record of what happened must not depend on it.
+model WebhookEvent {
+  id      String   @id @default(cuid())
+  at      DateTime @default(now())
+  type    String
+  payload Json
+
+  deliveries WebhookDelivery[]
+
+  @@index([at(sort: Desc)])
+}
+
+/// One event bound for one subscription, with its delivery state.
+///
+/// Fanned out at emission time rather than at dispatch, so a subscription
+/// created later does not receive history it never asked to observe.
+model WebhookDelivery {
+  id String @id @default(cuid())
+
+  eventId String
+  event   WebhookEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  /// `pending` — waiting for the dispatcher. `delivered` — the receiver
+  /// answered 2xx. `exhausted` — every attempt failed, or the target became
+  /// undeliverable (private address, subscription disabled); never retried.
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  /// Earliest instant the next attempt may run. Backoff doubles per failure.
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?
+  deliveredAt   DateTime?
+
+  @@unique([eventId, subscriptionId])
+  @@index([status, nextAttemptAt])
+}

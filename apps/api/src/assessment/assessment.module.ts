@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { LedgerModule } from '../ledger/ledger.module';
+import { WebhookModule } from '../webhook/webhook.module';
 import { AssessmentService } from './assessment.service';
 import { ExplanationService } from './explanation.service';
 
@@ -12,7 +13,7 @@ import { ExplanationService } from './explanation.service';
  * same computation so none of them can disagree about what it decided.
  */
 @Module({
-  imports: [LedgerModule],
+  imports: [LedgerModule, WebhookModule],
   providers: [AssessmentService, ExplanationService],
   exports: [AssessmentService],
 })

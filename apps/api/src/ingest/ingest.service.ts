@@ -7,6 +7,7 @@ import { attributionStats, type AttributionStats } from './attribution';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DetectionService } from '../risk/detection.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 import type { IngestRevenueDto, IngestResultDto } from './ingest.dto';
 
 /** Days of settled revenue behind the underwriting window. PRD §13.2. */
@@ -44,6 +45,7 @@ export class IngestService {
     private readonly ledger: LedgerService,
     private readonly assessments: AssessmentService,
     private readonly detection: DetectionService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   async record(input: IngestRevenueDto): Promise<IngestResultDto> {
@@ -142,6 +144,15 @@ export class IngestService {
         txHash,
         note: `${input.requests.toLocaleString('en-US')} requests · ${input.date.slice(0, 10)}`,
         borrowerId: borrower.id,
+      });
+
+      await this.webhooks.emit(tx, 'revenue.settled', {
+        handle: borrower.handle,
+        date: input.date.slice(0, 10),
+        settled: input.settled,
+        excluded,
+        requests: input.requests,
+        replaced: existing !== null,
       });
 
       return {
@@ -258,6 +269,15 @@ export class IngestService {
       });
 
       await this.recomputeWindow(tx, input.borrowerId);
+
+      // The pseudonymous label, same as every revenue surface. The payer
+      // wallet must not leave `X402Payment` through a webhook either.
+      await this.webhooks.emit(tx, 'revenue.received', {
+        handle: input.handle,
+        amount: input.amount,
+        payer: input.label,
+        date: date.toISOString().slice(0, 10),
+      });
     });
   }
 

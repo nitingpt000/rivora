@@ -5,6 +5,7 @@ import {
   availableCredit,
   canBorrow,
   evaluateSpend,
+  utilization,
   type SpendDecision,
 } from '@rivora/core';
 
@@ -14,6 +15,8 @@ import { LedgerError } from '../common/ledger.error';
 import type { MutationResultDto } from '../contracts/operations.dto';
 import { LedgerService } from '../ledger/ledger.service';
 import { SnapshotService, type LedgerState } from '../snapshot/snapshot.service';
+import { VaultService } from '../vault/vault.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 
 /**
  * Thrown when the spending policy refuses a draw.
@@ -54,6 +57,7 @@ export class CreditService {
     private readonly snapshots: SnapshotService,
     private readonly ledger: LedgerService,
     private readonly chain: ChainService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   /** Credit available to draw right now. */
@@ -156,6 +160,14 @@ export class CreditService {
         txHash,
         borrowerId: state.id,
       });
+
+      await this.webhooks.emit(tx, 'credit.draw.completed', {
+        handle: state.handle,
+        amount: moved.toNumber(),
+        category,
+        txHash,
+      });
+      await this.emitUtilization(tx, liquidity - moved.toNumber(), 'draw');
 
       return this.result(tx, { kind: 'draw', amount: moved.toNumber(), tx: txHash });
     });
@@ -295,12 +307,46 @@ export class CreditService {
         borrowerId: state.id,
       });
 
+      await this.webhooks.emit(tx, 'credit.repayment.completed', {
+        handle: state.handle,
+        amount: requested,
+        toInterest: applied.toInterest,
+        toPrincipal: applied.toPrincipal,
+        clearsDebt: applied.clearsDebt,
+        source: 'manual',
+        txHash,
+      });
+      await this.emitUtilization(
+        tx,
+        toNumber(state.vault.availableLiquidity) + returned.toNumber(),
+        'repayment',
+      );
+
       return this.result(tx, {
         kind: 'repay',
         amount: requested,
         clearsDebt: applied.clearsDebt,
         tx: txHash,
       });
+    });
+  }
+
+  /**
+   * Utilization after this transaction's own writes, read back rather than
+   * carried — the aggregate is the one number two racing mutations must not
+   * both derive from the state they started with.
+   */
+  private async emitUtilization(
+    tx: Prisma.TransactionClient,
+    availableLiquidity: number,
+    trigger: string,
+  ): Promise<void> {
+    const outstanding = await VaultService.outstandingPrincipal(tx);
+    await this.webhooks.emit(tx, 'vault.utilization.changed', {
+      utilizationPct: Math.round(utilization(outstanding, availableLiquidity) * 10_000) / 100,
+      outstandingPrincipal: outstanding,
+      availableLiquidity,
+      trigger,
     });
   }
 

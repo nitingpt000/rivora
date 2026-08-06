@@ -6,6 +6,7 @@ import type { LedgerService } from '../ledger/ledger.service';
 import type { SnapshotService } from '../snapshot/snapshot.service';
 import { makeState, makeTxClient } from '../testing/ledger-fixture';
 import { CreditService } from './credit.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 
 /**
  * The behaviour worth pinning down is the arithmetic and the refusals. Both
@@ -37,7 +38,12 @@ function build(
   } as unknown as LedgerService;
 
   return {
-    service: new CreditService(snapshots, ledger, new LedgerChainService()),
+    service: new CreditService(
+      snapshots,
+      ledger,
+      new LedgerChainService(),
+      { emit: vi.fn(async () => undefined) } as unknown as WebhookEmitter,
+    ),
     tx,
     snapshots,
     ledger,

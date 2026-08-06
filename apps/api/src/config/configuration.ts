@@ -82,6 +82,18 @@ export interface AppConfig {
   circleApiKey: string;
   circleEntitySecret: string;
   circleWalletId: string;
+  /** Milliseconds between webhook dispatch passes. */
+  webhookDispatchIntervalMs: number;
+  /** Per-delivery request timeout. A receiver slower than this has failed. */
+  webhookTimeoutMs: number;
+  /** Attempts before a delivery is exhausted. Backoff doubles per failure. */
+  webhookMaxAttempts: number;
+  /**
+   * Lets webhook targets be plain HTTP on private addresses. Exists for the
+   * local compose stack, where every reachable receiver is a private address
+   * — a real deployment leaves it off and the SSRF guard holds.
+   */
+  webhookAllowPrivate: boolean;
 }
 
 const MIN_SECRET_LENGTH = 32;
@@ -178,6 +190,12 @@ export function loadConfig(): AppConfig {
     circleApiKey: process.env.CIRCLE_API_KEY ?? '',
     circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET ?? '',
     circleWalletId: process.env.CIRCLE_WALLET_ID ?? '',
+    webhookDispatchIntervalMs: Number(process.env.WEBHOOK_DISPATCH_INTERVAL_MS ?? 5_000),
+    webhookTimeoutMs: Number(process.env.WEBHOOK_TIMEOUT_MS ?? 5_000),
+    webhookMaxAttempts: Number(process.env.WEBHOOK_MAX_ATTEMPTS ?? 8),
+    // Opt-in, and pointless to set by accident: it only widens where webhook
+    // deliveries may be sent, never who may register one.
+    webhookAllowPrivate: process.env.WEBHOOK_ALLOW_PRIVATE === 'true',
   };
 }
 

@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+
+import { isPrivateAddress } from '../common/private-address';
 
 /**
  * The endpoint binding probe. PRD §11.4.
@@ -40,33 +41,6 @@ const TIMEOUT_MS = 5_000;
 const PASS = '✓';
 const FAIL = '✗';
 const NOTE = '';
-
-/**
- * Ranges a borrower's endpoint may never resolve to.
- *
- * Loopback, link-local, and the three private IPv4 blocks, plus IPv6
- * loopback and unique-local. Without this, `http://169.254.169.254/` is a
- * cloud metadata endpoint and the probe is a credential exfiltration tool.
- */
-function isPrivateAddress(address: string): boolean {
-  if (isIP(address) === 6) {
-    const v6 = address.toLowerCase();
-    return v6 === '::1' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80');
-  }
-
-  const [a, b] = address.split('.').map(Number);
-  if (a === undefined || b === undefined) return true;
-
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a >= 224
-  );
-}
 
 /**
  * Reads the `payTo` out of an x402 challenge.

@@ -18,6 +18,7 @@ import { ChainService } from '../chain/chain.service';
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 import { ExplanationService } from './explanation.service';
 
 /** Settlement days between scheduled assessments. PRD §16.6. */
@@ -71,6 +72,7 @@ export class AssessmentService {
     private readonly ledger: LedgerService,
     private readonly chain: ChainService,
     private readonly explanations: ExplanationService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   /**
@@ -270,6 +272,18 @@ export class AssessmentService {
         borrowerId: borrower.id,
       });
 
+      await this.webhooks.emit(tx, 'risk.assessment.completed', {
+        handle: borrower.handle,
+        trigger,
+        score: result.score,
+        previousScore: result.previousScore,
+        tier: result.tier,
+        limit: result.limit,
+        previousLimit: result.previousLimit,
+        bindingConstraint: result.bindingKey,
+        enforced,
+      });
+
       // Only worth a notification when something the borrower would act on
       // actually moved. A reassessment that confirms the status quo is noise.
       if (enforced && Math.abs(delta) >= 0.01) {
@@ -278,6 +292,17 @@ export class AssessmentService {
           title: `Credit limit ${delta > 0 ? 'raised' : 'reduced'} to ${result.limit.toFixed(2)} USDC`,
           body: `Bound by ${result.bindingKey}. Score ${result.previousScore} → ${result.score}.`,
           borrowerId: borrower.id,
+        });
+
+        // The assessment event reports every run; this one fires only when
+        // the enforced limit moved, which is the fact a receiver acts on.
+        await this.webhooks.emit(tx, 'credit.limit.updated', {
+          handle: borrower.handle,
+          limit: result.limit,
+          previousLimit: result.previousLimit,
+          score: result.score,
+          tier: result.tier,
+          bindingConstraint: result.bindingKey,
         });
       }
 

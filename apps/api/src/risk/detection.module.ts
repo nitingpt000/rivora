@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { LedgerModule } from '../ledger/ledger.module';
+import { WebhookModule } from '../webhook/webhook.module';
 import { DetectionService } from './detection.service';
 
 /**
@@ -10,7 +11,7 @@ import { DetectionService } from './detection.service';
  * service.
  */
 @Module({
-  imports: [LedgerModule],
+  imports: [LedgerModule, WebhookModule],
   providers: [DetectionService],
   exports: [DetectionService],
 })

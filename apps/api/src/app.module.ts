@@ -25,6 +25,7 @@ import { RiskModule } from './risk/risk.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { SnapshotModule } from './snapshot/snapshot.module';
 import { VaultModule } from './vault/vault.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { VaultModule } from './vault/vault.module';
     HealthModule,
     IngestModule,
     X402Module,
+    WebhookModule,
   ],
   providers: [
     /**

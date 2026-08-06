@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 import { detect, severest, type DetectionSignals, type Finding } from './detection';
 
 /** Repayment share a restricted borrower routes. PRD §35.3. */
@@ -33,6 +34,7 @@ export class DetectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   /**
@@ -147,6 +149,14 @@ export class DetectionService {
         body: `${finding.reason}. New draws are blocked and the repayment share is now ${ESCALATED_REPAYMENT_BPS / 100}%. The outstanding balance continues to repay from routed revenue.`,
         borrowerId,
       });
+
+      await this.webhooks.emit(tx, 'borrower.restricted', {
+        handle,
+        reason: finding.reason,
+        kind: finding.kind,
+        previousLimit: toNumber(credit.limitAmount),
+        repaymentBps: ESCALATED_REPAYMENT_BPS,
+      });
     });
 
     this.logger.warn(`restricted ${handle}: ${finding.reason}`);
@@ -174,6 +184,12 @@ export class DetectionService {
         title: 'New draws frozen — under review',
         body: `${finding.reason}. The existing balance is unaffected and repayment continues as before.`,
         borrowerId,
+      });
+
+      await this.webhooks.emit(tx, 'borrower.watchlisted', {
+        handle,
+        reason: finding.reason,
+        kind: finding.kind,
       });
     });
 

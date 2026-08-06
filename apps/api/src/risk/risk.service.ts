@@ -17,6 +17,7 @@ import { dec, toNumber, usdc6 } from '../common/decimal';
 import { LedgerError } from '../common/ledger.error';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 import { DetectionService } from './detection.service';
 import type {
   AnomalyDetailDto,
@@ -57,6 +58,7 @@ export class RiskService {
     private readonly audit: AuditService,
     private readonly assessments: AssessmentService,
     private readonly detection: DetectionService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   /**
@@ -879,6 +881,13 @@ export class RiskService {
       txHash,
       note: declaration.trigger,
       borrowerId: declaration.borrowerId,
+    });
+
+    await this.webhooks.emit(tx, 'borrower.defaulted', {
+      handle: declaration.borrower.handle,
+      principal,
+      trigger: declaration.trigger,
+      evidenceHash: declaration.evidenceHash,
     });
 
     await this.audit.record(

@@ -5,6 +5,7 @@ import type { ExplanationService } from './explanation.service';
 import type { LedgerService } from '../ledger/ledger.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AssessmentService } from './assessment.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 
 /**
  * The narrator, switched off. Every test here is about the arithmetic, and
@@ -68,7 +69,13 @@ function serviceWith(days: Day[]) {
   } as unknown as PrismaService;
 
   const ledger = { run: vi.fn(), nextTxHash: vi.fn() } as unknown as LedgerService;
-  return new AssessmentService(prisma, ledger, new LedgerChainService(), silentExplanations());
+  return new AssessmentService(
+    prisma,
+    ledger,
+    new LedgerChainService(),
+    silentExplanations(),
+    { emit: vi.fn(async () => undefined) } as unknown as WebhookEmitter,
+  );
 }
 
 /** A steady 30-day series summing to 13,500. */
@@ -184,6 +191,7 @@ describe('AssessmentService.dueForReassessment', () => {
       {} as LedgerService,
       new LedgerChainService(),
       silentExplanations(),
+      { emit: vi.fn(async () => undefined) } as unknown as WebhookEmitter,
     );
   }
 

@@ -92,6 +92,10 @@ services:
       ARC_INDEXER_FROM_BLOCK: ${ARC_INDEXER_FROM_BLOCK:-}
       ARC_INDEXER_INTERVAL_MS: ${ARC_INDEXER_INTERVAL_MS:-15000}
       ARC_REVENUE_ROUTERS: ${ARC_REVENUE_ROUTERS:-}
+      # Webhook targets on this stack are local receivers by definition, and
+      # the SSRF guard would refuse every one of them. Local stack only; a
+      # real deployment leaves this unset and delivers only to public HTTPS.
+      WEBHOOK_ALLOW_PRIVATE: 'true'
       # Optional. Without it the assessment explanation is simply absent.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       EXPLANATION_MODEL: ${EXPLANATION_MODEL:-anthropic/claude-sonnet-4.5}

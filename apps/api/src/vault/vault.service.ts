@@ -14,6 +14,7 @@ import type { MutationResultDto, SnapshotOnlyResultDto } from '../contracts/oper
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SnapshotService } from '../snapshot/snapshot.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 import type { VaultPerformanceDto, VaultPortfolioDto } from './vault.dto';
 
 /**
@@ -31,7 +32,23 @@ export class VaultService {
     private readonly snapshots: SnapshotService,
     private readonly ledger: LedgerService,
     private readonly prisma: PrismaService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
+
+  /** Utilization after this transaction's own liquidity write. */
+  private async emitUtilization(
+    tx: Prisma.TransactionClient,
+    availableLiquidity: number,
+    trigger: string,
+  ): Promise<void> {
+    const outstanding = await VaultService.outstandingPrincipal(tx);
+    await this.webhooks.emit(tx, 'vault.utilization.changed', {
+      utilizationPct: Math.round(utilization(outstanding, availableLiquidity) * 10_000) / 100,
+      outstandingPrincipal: outstanding,
+      availableLiquidity,
+      trigger,
+    });
+  }
 
   /**
    * Protocol-wide outstanding principal, summed across every borrower.
@@ -85,6 +102,12 @@ export class VaultService {
         amount: `${moved.toFixed(2)} USDC`,
         txHash,
       });
+
+      await this.emitUtilization(
+        tx,
+        toNumber(vault.availableLiquidity) + moved.toNumber(),
+        'deposit',
+      );
 
       return this.result(tx, {
         kind: 'deposit',
@@ -156,6 +179,8 @@ export class VaultService {
         txHash,
         ...(plan.queued > 0 ? { note: `queued ${queued.toFixed(2)}` } : {}),
       });
+
+      await this.emitUtilization(tx, liquidity - paidOut.toNumber(), 'withdraw');
 
       return this.result(tx, {
         kind: 'withdraw',

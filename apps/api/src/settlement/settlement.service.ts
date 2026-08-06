@@ -8,6 +8,7 @@ import { AssessmentService } from '../assessment/assessment.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { SnapshotService } from '../snapshot/snapshot.service';
 import { VaultService } from '../vault/vault.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 
 /** Queue funding rate per settlement day, USDC. PRD §23.4. */
 const QUEUE_FUNDING_PER_DAY = 186.34;
@@ -31,6 +32,7 @@ export class SettlementService {
     private readonly ledger: LedgerService,
     private readonly assessments: AssessmentService,
     private readonly chain: ChainService,
+    private readonly webhooks: WebhookEmitter,
   ) {}
 
   async tick(): Promise<SnapshotOnlyResultDto> {
@@ -177,6 +179,31 @@ export class SettlementService {
         note: `day ${vault.day + 1} · interest ${accrued.toFixed(2)} · principal ${repaidPrincipal.toFixed(2)}`,
         borrowerId: state.id,
       });
+
+      // The automatic path — revenue servicing the debt at settlement. A day
+      // with no debt moved nothing and reports nothing.
+      if (returnedToVault > 0) {
+        await this.webhooks.emit(tx, 'credit.repayment.completed', {
+          handle: state.handle,
+          amount: returnedToVault,
+          toInterest: interestPaid,
+          toPrincipal: repaidPrincipal,
+          clearsDebt: status === 'REPAID' && credit.status !== 'REPAID',
+          source: 'settlement',
+          day: vault.day + 1,
+          txHash,
+        });
+
+        const outstandingAfter = Math.max(0, outstanding - repaidPrincipal);
+        const liquidityAfter = liquidity + returnedToVault;
+        await this.webhooks.emit(tx, 'vault.utilization.changed', {
+          utilizationPct:
+            Math.round(utilization(outstandingAfter, liquidityAfter) * 10_000) / 100,
+          outstandingPrincipal: outstandingAfter,
+          availableLiquidity: liquidityAfter,
+          trigger: 'settlement',
+        });
+      }
 
       return vault.day + 1;
     });

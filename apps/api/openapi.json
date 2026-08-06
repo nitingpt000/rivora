@@ -276,6 +276,32 @@
         ]
       }
     },
+    "/distribution": {
+      "get": {
+        "description": "Counts only — no handles, no revenue. Lets a reader judge where a given score sits relative to the rest of the book.",
+        "operationId": "PublicController_distribution",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TierDistributionDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "How the scored population sits across tiers",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/defaults": {
       "get": {
         "description": "Public by design: the registry’s value to a third party depends on it being non-negotiable. A default may be cured, but no interface path deletes a record.",
@@ -296,6 +322,102 @@
         "summary": "The permanent default registry",
         "tags": [
           "public"
+        ]
+      }
+    },
+    "/profile": {
+      "get": {
+        "description": "What the operator registered and what the protocol bound: service, endpoint, custody model, router address and wallets. Changes on registration rather than on settlement.",
+        "operationId": "BorrowerController_profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorrowerProfileDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registration details",
+        "tags": [
+          "borrower"
+        ]
+      }
+    },
+    "/observation": {
+      "get": {
+        "description": "Each threshold a new service clears before it can draw, with how far along it is. `eligible` turns true once every requirement passes.",
+        "operationId": "BorrowerController_observation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but this wallet has no registered service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Progress through the observation window",
+        "tags": [
+          "borrower"
         ]
       }
     },
@@ -1077,6 +1199,224 @@
         ]
       }
     },
+    "/webhooks": {
+      "post": {
+        "description": "The signing secret is returned once, here, and never again. Targets must be HTTPS on a public address; the same check runs again before every delivery.",
+        "operationId": "WebhookController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreatedDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register a webhook subscription",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "get": {
+        "description": "Secrets are reported as fingerprints only. `exhaustedDeliveries` counting up is a receiver that has stopped answering.",
+        "operationId": "WebhookController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookListDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Every subscription, with its delivery backlog",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/webhooks/{id}": {
+      "patch": {
+        "operationId": "WebhookController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscriptionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change a subscription’s target, events or status",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "delete": {
+        "description": "Removes the subscription and its delivery history. The events themselves stay.",
+        "operationId": "WebhookController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a subscription",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
     "/credit/draw": {
       "post": {
         "description": "Capacity, borrower status and vault liquidity are all checked server-side rather than in the caller. A draw above the available limit is refused with `exceeds_available`.",
@@ -1697,6 +2037,390 @@
         ]
       }
     },
+    "/risk/alerts": {
+      "get": {
+        "description": "Derived from live state rather than stored, so an alert cannot outlive the condition that raised it. Detected anomalies first, then coverage drift, then sector-cap breaches.",
+        "operationId": "RiskController_alerts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RiskAlertDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The operator alert feed",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/recommendations": {
+      "get": {
+        "description": "Assessments run on a schedule, so a limit always trails its inputs. This is the queue that gap creates, sorted by the size of the disagreement.",
+        "operationId": "RiskController_recommendations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LimitRecommendationDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Where the ladder disagrees with the limit in force",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/borrower/{handle}/reassess": {
+      "post": {
+        "description": "Runs the underwriter immediately rather than waiting for the scheduled interval. PRD §16.6 lists the triggers that justify this: a material revenue change, a default warning, a large refund, suspicious activity, or a completed repayment.\n\nWrites an assessment record either way. A borrower who is RESTRICTED or DEFAULTED keeps the limit their status imposed — an assessment cannot hand credit back to a borrower a risk decision just took it from.",
+        "operationId": "RiskController_reassess",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0x9c4e…a7f1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorrowerRiskDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Force an assessment now",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/borrower/{handle}/reinstate": {
+      "post": {
+        "description": "Returns a RESTRICTED or WATCH borrower to ACTIVE and resets the repayment share to its normal level.\n\nDetection is automatic; lifting is not. Protecting the book from a borrower inflating their own revenue should not wait for somebody to be awake, and releasing a borrower from that judgement should never happen because a number drifted back over a line.\n\nThe limit is **not** restored — it stays at zero until an assessment sets it, so a reinstated borrower is underwritten again rather than handed back the number they held before the finding.",
+        "operationId": "RiskController_reinstate",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0x9c4e…a7f1",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReinstateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorrowerRiskDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lift a restriction",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/borrower/{handle}": {
+      "get": {
+        "description": "Position, exact factor values and the score breakdown, plus a merged timeline of assessments, detections and money movement. Payer identities are never included.",
+        "operationId": "RiskController_borrower",
+        "parameters": [
+          {
+            "name": "handle",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0x9c4e…a7f1",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorrowerRiskDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One borrower, in full",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/anomaly": {
+      "get": {
+        "description": "The evidence behind a revenue-manipulation finding, and the borrower state it produced. Returns the most recent when `ref` is omitted.",
+        "operationId": "RiskController_anomaly",
+        "parameters": [
+          {
+            "name": "ref",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "A-0142",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnomalyDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A detected manipulation event",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
     "/risk/params": {
       "get": {
         "description": "Read-only, and deliberately so. Changing a protocol parameter is a governance action with a timelock, not an HTTP call — a mutation here would be the most dangerous endpoint in the API. Values are read from `@rivora/core`, so what an operator sees is what the underwriter applies.",
@@ -1750,7 +2474,7 @@
     },
     "/risk/defaults/declare": {
       "post": {
-        "description": "Writes a permanent public record against a named borrower, sets the credit line to DEFAULTED and realises the loss against the vault.\n\nFully audited: actor, request id, evidence hash and trigger are recorded and cannot be edited or deleted.\n\n**Not yet implemented:** PRD §33 requires a 2-of-3 operator quorum for this action. Today a single `ops` session is sufficient.",
+        "description": "First signature of the quorum. The declaration is created pending; a second, distinct operator commits it via `POST /risk/defaults/:id/approve`, which writes the permanent record, sets the credit line to DEFAULTED and realises the loss against the vault (PRD §19.8).\n\nOne pending declaration per borrower — a second proposal is refused rather than merged, because merging would attach a signature to figures the second operator never saw.\n\nFully audited at every step: proposer, approvers, request ids, evidence hash and trigger are recorded and cannot be edited or deleted.",
         "operationId": "RiskController_declareDefault",
         "parameters": [],
         "requestBody": {
@@ -1769,7 +2493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DefaultDeclarationResultDto"
+                  "$ref": "#/components/schemas/DeclarationStatusDto"
                 }
               }
             }
@@ -1810,7 +2534,126 @@
             "bearer": []
           }
         ],
-        "summary": "Declare a default",
+        "summary": "Propose a default",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/defaults/{id}/approve": {
+      "post": {
+        "description": "Adds this operator’s signature. When the quorum is met the record commits atomically: the permanent default record, the DEFAULTED credit line, the realised vault loss and the audit rows land together or not at all.\n\nThe proposer signing again is refused — two signatures must mean two people. The declared principal is re-validated at commit, because settlement repays principal daily and the balance may have moved between signatures.",
+        "operationId": "RiskController_approveDefault",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "clx8f2k9a0000",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeclarationStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sign a pending declaration",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/risk/defaults/pending": {
+      "get": {
+        "description": "Oldest first, with who has signed each. The second operator’s worklist.",
+        "operationId": "RiskController_pendingDefaults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeclarationStatusDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requires the `ops` role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Declarations still collecting signatures",
         "tags": [
           "risk"
         ]
@@ -1891,6 +2734,124 @@
         ]
       }
     },
+    "/partner/usage": {
+      "get": {
+        "description": "Scoped to the presenting key. There is no parameter that could point this at another caller.\n\n`billable` counts successful calls on metered routes only — sandbox calls and errors appear in `requests` but are never charged.",
+        "operationId": "PartnerController_usage",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Window length, 1–366 days. Defaults to 30.",
+            "schema": {
+              "example": 30,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiUsageDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "What this key has been used for",
+        "tags": [
+          "partner"
+        ]
+      }
+    },
+    "/partner/sandbox/profiles": {
+      "get": {
+        "description": "Named profiles covering the range of outcomes — prime through ineligible — so an integration can be tested against a restricted borrower without waiting for a real one.",
+        "operationId": "PartnerController_profiles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SandboxProfileDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Synthetic borrowers available in the sandbox",
+        "tags": [
+          "partner"
+        ]
+      }
+    },
+    "/partner/sandbox/score/{id}": {
+      "post": {
+        "description": "Runs the production underwriter over a synthetic profile. Every figure is computed by the same `@rivora/core` functions that underwrite real borrowers, so the sandbox cannot drift from production.\n\nResponses carry `sandbox: true` and no underwriter signature — a response lifted from here cannot be replayed as an attestation.",
+        "operationId": "PartnerController_scoreSandbox",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "07",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxScoreDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Score a synthetic borrower",
+        "tags": [
+          "partner"
+        ]
+      }
+    },
     "/partner/score/{handle}": {
       "get": {
         "description": "Requires an API key with the `score:read` scope, sent as `x-api-key`.\n\nDeliberately narrower than the borrower’s own view: score, tier and counts only. Revenue figures, payer data and the endpoint URL are never returned.\n\nRate limited to 60 requests per minute per caller.",
@@ -1944,6 +2905,65 @@
           }
         ],
         "summary": "Look up a borrower’s credit standing",
+        "tags": [
+          "partner"
+        ]
+      }
+    },
+    "/partner/console": {
+      "get": {
+        "description": "Keys are returned by prefix only — the key itself is shown once at issue and never again.\n\nUsage is aggregated across every key the signed-in wallet owns. `billable` counts successful calls on metered routes; sandbox calls and errors appear in `requests` but are never charged.",
+        "operationId": "PartnerConsoleController_console",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Window length, 1–366 days. Defaults to 30.",
+            "schema": {
+              "example": 30,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerConsoleDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not a partner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The caller’s keys and what they have been used for",
         "tags": [
           "partner"
         ]
@@ -2176,6 +3196,199 @@
           "health"
         ]
       }
+    },
+    "/ingest/revenue": {
+      "post": {
+        "description": "One day per borrower. Re-posting the same date replaces that day rather than adding to it — settlement is netted per day, and a retried batch must not double-count.\n\nRecomputes the underwriting window from every day on file, and triggers an assessment when eligible revenue moves 10% or more. PRD §16.6 lists a material revenue change as an assessment trigger.",
+        "operationId": "IngestController_revenue",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "description": "Replays the first response rather than recording the day twice.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRevenueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Record a settled day of revenue",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/ingest/revenue/batch": {
+      "post": {
+        "description": "Applied in order, so the window is correct after the last one lands. Intended for seeding a borrower’s history at registration, not for steady-state settlement.",
+        "operationId": "IngestController_batch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IngestResultDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This wallet is not an operator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Backfill a range of days",
+        "tags": [
+          "ingest"
+        ]
+      }
+    },
+    "/x402/quote": {
+      "get": {
+        "description": "Answers an unpaid request with **402 Payment Required** and an x402 challenge naming the price, the asset and where to pay. Retry with an `X-PAYMENT` header carrying a base64-encoded EIP-3009 `TransferWithAuthorization` signed by the payer.\n\nThe signature is checked cryptographically and its nonce is single-use, so an authorization cannot be replayed against a second request. A verified payment is recorded as revenue and reaches the underwriting window through the same path an external indexer would use.\n\nSettlement is not performed here. Circle Gateway batches authorizations and settles them onchain; a seller serves on the strength of the signature, which is the premise nanopayments rest on.",
+        "operationId": "X402Controller_quote",
+        "parameters": [
+          {
+            "name": "symbol",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "ETH-USD"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paid. The quote."
+          },
+          "402": {
+            "description": "Unpaid, or the payment was refused. Carries the challenge."
+          }
+        },
+        "summary": "A market-data quote — paid, per request",
+        "tags": [
+          "x402"
+        ]
+      }
+    },
+    "/x402/takings": {
+      "get": {
+        "description": "Aggregate only — paid requests, revenue and the count of distinct payers. Payer addresses are never returned; the revenue surfaces carry a pseudonym instead (PRD §21).",
+        "operationId": "X402Controller_takings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "What the paid API has earned",
+        "tags": [
+          "x402"
+        ]
+      }
     }
   },
   "info": {
@@ -2316,7 +3529,7 @@
           "message": {
             "type": "string",
             "description": "The exact EIP-4361 message that was signed. Any edit invalidates the signature.",
-            "example": "localhost:3000 wants you to sign in with your Ethereum account:\n0x5d92…\n\nSign in to Rivora.\n\nURI: http://localhost:3000\nVersion: 1\nChain ID: 5918836\nNonce: k7Qm2Xp9Rt4Nw8Lz\nIssued At: 2026-08-02T14:31:07.000Z"
+            "example": "localhost:3000 wants you to sign in with your Ethereum account:\n0x5d92…\n\nSign in to Rivora.\n\nURI: http://localhost:3000\nVersion: 1\nChain ID: 5042002\nNonce: k7Qm2Xp9Rt4Nw8Lz\nIssued At: 2026-08-02T14:31:07.000Z"
           },
           "signature": {
             "type": "string",
@@ -2588,6 +3801,11 @@
           "repeatPayers": {
             "type": "number",
             "example": 168
+          },
+          "attributedPct": {
+            "type": "number",
+            "example": 100,
+            "description": "Share of eligible revenue with a known payer behind it. Concentration and diversity price the unattributed remainder as a single presumed payer, so a low figure here reads as concentration risk rather than as innocence."
           }
         },
         "required": [
@@ -2599,7 +3817,8 @@
           "largestPayerPct",
           "hhi",
           "uniquePayers",
-          "repeatPayers"
+          "repeatPayers",
+          "attributedPct"
         ]
       },
       "QualityFactorsDto": {
@@ -2952,6 +4171,210 @@
           "meta"
         ]
       },
+      "CustodyConcentrationDto": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "principal": {
+            "type": "number",
+            "example": 7630
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 90.1
+          }
+        },
+        "required": [
+          "model",
+          "principal",
+          "sharePct"
+        ]
+      },
+      "SectorConcentrationDto": {
+        "type": "object",
+        "properties": {
+          "sector": {
+            "type": "string",
+            "example": "Data lookup and static datasets"
+          },
+          "principal": {
+            "type": "number",
+            "example": 3940
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 46.5
+          },
+          "capPct": {
+            "type": "number",
+            "example": 40
+          },
+          "breached": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "sector",
+          "principal",
+          "sharePct",
+          "capPct",
+          "breached"
+        ]
+      },
+      "UpstreamConcentrationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Model provider A"
+          },
+          "category": {
+            "type": "string",
+            "example": "compute"
+          },
+          "principal": {
+            "type": "number",
+            "example": 4930,
+            "description": "Principal exposed through this dependency, USDC."
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 58.2
+          },
+          "substitutable": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "name",
+          "category",
+          "principal",
+          "sharePct",
+          "substitutable"
+        ]
+      },
+      "VaultPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "displayedApyPct": {
+            "type": "number",
+            "example": 6,
+            "description": "What the vault displays, subsidy included."
+          },
+          "organicApyPct": {
+            "type": "number",
+            "example": 3.08,
+            "description": "Earned from borrower interest alone."
+          },
+          "subsidyApyPct": {
+            "type": "number",
+            "example": 2.92,
+            "description": "Paid from the protocol subsidy. Ends on the date below and is not guaranteed."
+          },
+          "subsidyEnds": {
+            "type": "string",
+            "example": "2026-10-30",
+            "description": "When the subsidy stops."
+          },
+          "blendedBorrowerRatePct": {
+            "type": "number",
+            "example": 12.1,
+            "description": "Blended rate paid by borrowers."
+          },
+          "protocolSpreadPct": {
+            "type": "number",
+            "example": 3,
+            "description": "Protocol’s share of borrower interest."
+          },
+          "interestGenerated": {
+            "type": "number",
+            "example": 184.2
+          },
+          "realizedLosses": {
+            "type": "number",
+            "example": 0
+          },
+          "coverageMultiple": {
+            "type": "number",
+            "example": 4.9,
+            "description": "First-loss cover over realised losses to date."
+          },
+          "weightedMeanPaybackDays": {
+            "type": "number",
+            "example": 26,
+            "description": "Weighted mean days to repay the book."
+          },
+          "protocolSpreadTaken": {
+            "type": "number",
+            "example": 5.5,
+            "description": "Protocol’s cut of interest to date, USDC."
+          },
+          "subsidyPaidIn": {
+            "type": "number",
+            "example": 120.4,
+            "description": "Subsidy paid into the vault to date, USDC."
+          },
+          "netToLps": {
+            "type": "number",
+            "example": 299.1,
+            "description": "Interest plus subsidy, less the spread."
+          },
+          "principalOriginated": {
+            "type": "number",
+            "example": 16660,
+            "description": "Principal originated over the vault’s life."
+          },
+          "byCustody": {
+            "description": "Principal by custody model — how much of the book repayment is structural for.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustodyConcentrationDto"
+            }
+          },
+          "bySector": {
+            "description": "Principal by service category. An LP funds the whole book, so its concentration is theirs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectorConcentrationDto"
+            }
+          },
+          "upstream": {
+            "description": "Measured across borrowers — two services reselling one provider are one risk, and diversifying across borrowers does not fix it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpstreamConcentrationDto"
+            }
+          }
+        },
+        "required": [
+          "displayedApyPct",
+          "organicApyPct",
+          "subsidyApyPct",
+          "subsidyEnds",
+          "blendedBorrowerRatePct",
+          "protocolSpreadPct",
+          "interestGenerated",
+          "realizedLosses",
+          "coverageMultiple",
+          "weightedMeanPaybackDays",
+          "protocolSpreadTaken",
+          "subsidyPaidIn",
+          "netToLps",
+          "principalOriginated",
+          "byCustody",
+          "bySector",
+          "upstream"
+        ]
+      },
       "ProtocolStatsDto": {
         "type": "object",
         "properties": {
@@ -3013,6 +4436,43 @@
             "type": "string",
             "example": "2026-08-02T14:31:07.000Z",
             "format": "date-time"
+          },
+          "firstLossTranche": {
+            "type": "number",
+            "example": 12500,
+            "description": "First-loss capital ahead of depositors, USDC."
+          },
+          "firstLossCoveragePct": {
+            "type": "number",
+            "example": 5.1,
+            "description": "First-loss tranche as a share of vault assets."
+          },
+          "eligibleRevenue": {
+            "type": "number",
+            "example": 13500,
+            "description": "Eligible revenue across every borrower, USDC."
+          },
+          "authorizationsIssued": {
+            "type": "number",
+            "example": 412000,
+            "description": "Paid requests observed across the protocol."
+          },
+          "probeSuccessPct": {
+            "type": "number",
+            "example": 99.2,
+            "description": "Mean fulfilment rate across borrowers."
+          },
+          "meanUptimePct": {
+            "type": "number",
+            "example": 99.7
+          },
+          "vault": {
+            "description": "Vault yield and coverage. The same figures the LP surface reports — quoted from one place so the landing page cannot advertise a different APY. Concentration is omitted: the book’s composition is for depositors, not for a stranger.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VaultPerformanceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -3028,7 +4488,14 @@
           "repaidFromRevenuePct",
           "day",
           "network",
-          "asOf"
+          "asOf",
+          "firstLossTranche",
+          "firstLossCoveragePct",
+          "eligibleRevenue",
+          "authorizationsIssued",
+          "probeSuccessPct",
+          "meanUptimePct",
+          "vault"
         ]
       },
       "ReputationBandDto": {
@@ -3143,6 +4610,35 @@
           "model"
         ]
       },
+      "TierDistributionDto": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "Prime",
+              "Strong",
+              "Standard",
+              "Restricted",
+              "Ineligible"
+            ]
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 41.1
+          },
+          "subjects": {
+            "type": "number",
+            "example": 774,
+            "description": "Borrowers in this band."
+          }
+        },
+        "required": [
+          "tier",
+          "sharePct",
+          "subjects"
+        ]
+      },
       "DefaultRecordDto": {
         "type": "object",
         "properties": {
@@ -3247,6 +4743,148 @@
           "cureRatePct"
         ]
       },
+      "BorrowerProfileDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "serviceName": {
+            "type": "string",
+            "example": "Quote Feed API"
+          },
+          "category": {
+            "type": "string",
+            "example": "Data lookup and static datasets"
+          },
+          "endpoint": {
+            "type": "string",
+            "example": "https://api.example.com/v1/quotes"
+          },
+          "endpointHash": {
+            "type": "string",
+            "example": "0x4b21…9d07"
+          },
+          "routerAddress": {
+            "type": "string",
+            "example": "0x7d10…3c88",
+            "description": "Bound Revenue Router."
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "operatingWallet": {
+            "type": "string",
+            "example": "0x2b18…9e04"
+          },
+          "ownerWallet": {
+            "type": "string",
+            "example": "0x5d92…4f11"
+          },
+          "operator": {
+            "type": "string",
+            "example": "Ridgeline Data Ltd"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "example": "Estonia"
+          },
+          "kybVerifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "handle",
+          "serviceName",
+          "category",
+          "endpoint",
+          "custody",
+          "operatingWallet",
+          "ownerWallet",
+          "registeredAt"
+        ]
+      },
+      "ObservationRequirementDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "30 days of revenue history"
+          },
+          "ratio": {
+            "type": "number",
+            "example": 0.7,
+            "description": "Progress toward the threshold, 0–1."
+          },
+          "progress": {
+            "type": "string",
+            "example": "21 / 30",
+            "description": "Progress in the requirement’s own units."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pending"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "ratio",
+          "progress",
+          "status"
+        ]
+      },
+      "ObservationStatusDto": {
+        "type": "object",
+        "properties": {
+          "daysObserved": {
+            "type": "number",
+            "example": 21
+          },
+          "daysRequired": {
+            "type": "number",
+            "example": 30
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObservationRequirementDto"
+            }
+          },
+          "eligible": {
+            "type": "boolean",
+            "example": false,
+            "description": "True once every requirement passes."
+          },
+          "dailySeries": {
+            "description": "Settled revenue per day so far, oldest first.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "daysObserved",
+          "daysRequired",
+          "requirements",
+          "eligible",
+          "dailySeries"
+        ]
+      },
       "RevenueDetailDto": {
         "type": "object",
         "properties": {
@@ -3309,6 +4947,52 @@
             "type": "string",
             "example": "2026-08-01T00:00:00.000Z",
             "format": "date-time"
+          },
+          "dailySeries": {
+            "example": [
+              42,
+              55,
+              48,
+              61
+            ],
+            "description": "Settled revenue per day over the window, oldest first. The consistency signal is computed from this, not from the mean.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "requests": {
+            "type": "number",
+            "example": 412000,
+            "description": "Paid requests authorized over the window."
+          },
+          "settled": {
+            "type": "number",
+            "example": 396500,
+            "description": "Authorizations that settled successfully."
+          },
+          "failed": {
+            "type": "number",
+            "example": 12100
+          },
+          "refunded": {
+            "type": "number",
+            "example": 3400
+          },
+          "meanPrice": {
+            "type": "number",
+            "example": 0.034,
+            "description": "Mean price per settled request, USDC."
+          },
+          "newPayers": {
+            "type": "number",
+            "example": 74,
+            "description": "Payers first seen inside the window."
+          },
+          "medianPayerLifetimeDays": {
+            "type": "number",
+            "example": 41,
+            "description": "Median days between a payer’s first and last request."
           }
         },
         "required": [
@@ -3322,7 +5006,15 @@
           "concentrationBand",
           "uniquePayers",
           "repeatPayers",
-          "repeatRatePct"
+          "repeatRatePct",
+          "dailySeries",
+          "requests",
+          "settled",
+          "failed",
+          "refunded",
+          "meanPrice",
+          "newPayers",
+          "medianPayerLifetimeDays"
         ]
       },
       "RevenueCustomerDto": {
@@ -3464,6 +5156,41 @@
           "points"
         ]
       },
+      "ScoreComponentDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "reliability"
+          },
+          "label": {
+            "type": "string",
+            "example": "Service reliability"
+          },
+          "weight": {
+            "type": "number",
+            "example": 0.2,
+            "description": "Share of the total score this signal can carry."
+          },
+          "value": {
+            "type": "number",
+            "example": 0.927,
+            "description": "Normalised signal strength, 0–1."
+          },
+          "contribution": {
+            "type": "number",
+            "example": 18.54,
+            "description": "Points contributed to the 0–100 score."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "weight",
+          "value",
+          "contribution"
+        ]
+      },
       "AssessmentDto": {
         "type": "object",
         "properties": {
@@ -3487,6 +5214,11 @@
             "type": "string",
             "example": "growthCap",
             "description": "Which rung decided the limit."
+          },
+          "explanation": {
+            "type": "string",
+            "example": "Your limit is held at 2,530 USDC by the growth cap rather than by your revenue…",
+            "description": "Plain-language reading of the ladder, written after the decision was made. Absent when unconfigured or when the call failed — the ladder below is the record and does not depend on it."
           },
           "ladder": {
             "description": "Every candidate limit, in display order.",
@@ -3514,6 +5246,13 @@
             "type": "string",
             "example": "2026-08-02T14:00:00.000Z",
             "format": "date-time"
+          },
+          "components": {
+            "description": "The weighted signals behind the score, in weight order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreComponentDto"
+            }
           }
         },
         "required": [
@@ -3526,7 +5265,8 @@
           "penalties",
           "quality",
           "model",
-          "assessedAt"
+          "assessedAt",
+          "components"
         ]
       },
       "AssessmentHistoryEntryDto": {
@@ -3564,6 +5304,41 @@
           "limit",
           "previousLimit",
           "bindingKey"
+        ]
+      },
+      "UpstreamDependencyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Model provider A"
+          },
+          "category": {
+            "type": "string",
+            "example": "compute"
+          },
+          "declaredCostPct": {
+            "type": "number",
+            "example": 62,
+            "description": "Share of the borrower’s declared cost base."
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 58.2,
+            "description": "Share of protocol principal exposed through it."
+          },
+          "substitutable": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether an equivalent provider could be swapped in."
+          }
+        },
+        "required": [
+          "name",
+          "category",
+          "declaredCostPct",
+          "sharePct",
+          "substitutable"
         ]
       },
       "CustodyStatusDto": {
@@ -3627,6 +5402,13 @@
           "operatingSharePct": {
             "type": "number",
             "example": 78
+          },
+          "upstream": {
+            "description": "Services the borrower depends on to fulfil requests.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpstreamDependencyDto"
+            }
           }
         },
         "required": [
@@ -3640,7 +5422,75 @@
           "uptimePct",
           "repaymentSharePct",
           "reserveSharePct",
-          "operatingSharePct"
+          "operatingSharePct",
+          "upstream"
+        ]
+      },
+      "AllowlistEntryDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0xf120…88ab"
+          },
+          "name": {
+            "type": "string",
+            "example": "Model provider A"
+          },
+          "category": {
+            "type": "string",
+            "example": "compute"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "address",
+          "name",
+          "category"
+        ]
+      },
+      "PolicyDecisionDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recipient": {
+            "type": "string",
+            "example": "0xf120…88ab"
+          },
+          "amount": {
+            "type": "number",
+            "example": 42
+          },
+          "category": {
+            "type": "string",
+            "example": "compute"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "allowed",
+              "rejected",
+              "queued"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "example": "above 250 · awaiting owner signature"
+          }
+        },
+        "required": [
+          "at",
+          "recipient",
+          "amount",
+          "category",
+          "outcome",
+          "reason"
         ]
       },
       "AgentPolicyDto": {
@@ -3694,6 +5544,20 @@
             "type": "string",
             "format": "date-time",
             "description": "When the pending change applies."
+          },
+          "allowlist": {
+            "description": "Destinations a draw may be spent to. Anything else is refused.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AllowlistEntryDto"
+            }
+          },
+          "decisions": {
+            "description": "Recent evaluations, newest first. Rejections are recorded as well as approvals.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyDecisionDto"
+            }
           }
         },
         "required": [
@@ -3703,7 +5567,9 @@
           "humanApprovalThreshold",
           "allowedCategories",
           "blockedCategories",
-          "policyChangeDelayHours"
+          "policyChangeDelayHours",
+          "allowlist",
+          "decisions"
         ]
       },
       "UpdatePolicyDto": {
@@ -3745,6 +5611,47 @@
           }
         }
       },
+      "ReserveEventDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "contribution",
+              "applied",
+              "released",
+              "topup"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "example": 9,
+            "description": "Signed. Negative when the reserve is drawn down."
+          },
+          "balance": {
+            "type": "number",
+            "example": 248.6,
+            "description": "Reserve balance after the event."
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x4a71…9f30"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "type",
+          "amount",
+          "balance"
+        ]
+      },
       "ReserveStatusDto": {
         "type": "object",
         "properties": {
@@ -3769,6 +5676,13 @@
             "type": "number",
             "example": 9,
             "description": "Expected daily contribution at current revenue, USDC."
+          },
+          "activity": {
+            "description": "Movements, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReserveEventDto"
+            }
           }
         },
         "required": [
@@ -3776,7 +5690,8 @@
           "target",
           "coveragePct",
           "contributionSharePct",
-          "dailyContribution"
+          "dailyContribution",
+          "activity"
         ]
       },
       "NotificationDto": {
@@ -3936,6 +5851,16 @@
             "type": "number",
             "example": 0.04,
             "description": "Advertised price per request, USDC."
+          },
+          "operatingWallet": {
+            "type": "string",
+            "example": "0x2b18000000000000000000000000000000009e04",
+            "description": "Where draws are paid. Defaults to the connecting wallet. Distinct from the owner wallet on purpose: the operating wallet is what the agent spends from day to day, and the owner wallet is what authorises changes to the arrangement — a service that keeps them separate can rotate the spending key without renegotiating its credit."
+          },
+          "revenueWallet": {
+            "type": "string",
+            "example": "0x5d92000000000000000000000000000000003ba6",
+            "description": "Where settled revenue arrives before the router splits it. Defaults to the connecting wallet."
           }
         },
         "required": [
@@ -3983,6 +5908,263 @@
           "status",
           "observationDays",
           "registeredAt"
+        ]
+      },
+      "CreateWebhookDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "example": "https://ops.example.com/hooks/rivora",
+            "description": "Delivery target. HTTPS with a public address; validated again at every delivery."
+          },
+          "events": {
+            "type": "array",
+            "example": [
+              "credit.draw.completed",
+              "borrower.defaulted"
+            ],
+            "description": "Event types to receive, from the PRD §27 catalogue.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "revenue.received",
+                "revenue.settled",
+                "risk.assessment.completed",
+                "credit.limit.updated",
+                "credit.draw.completed",
+                "credit.repayment.completed",
+                "borrower.watchlisted",
+                "borrower.restricted",
+                "borrower.defaulted",
+                "vault.utilization.changed"
+              ]
+            }
+          }
+        },
+        "required": [
+          "url",
+          "events"
+        ]
+      },
+      "WebhookCreatedDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmb1x…"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://ops.example.com/hooks/rivora"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "revenue.received",
+                "revenue.settled",
+                "risk.assessment.completed",
+                "credit.limit.updated",
+                "credit.draw.completed",
+                "credit.repayment.completed",
+                "borrower.watchlisted",
+                "borrower.restricted",
+                "borrower.defaulted",
+                "vault.utilization.changed"
+              ]
+            }
+          },
+          "secretFingerprint": {
+            "type": "string",
+            "example": "9f2c11ab",
+            "description": "First bytes of the secret’s SHA-256 — enough to tell two secrets apart, never enough to sign."
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-08-05T00:00:00.000Z"
+          },
+          "secret": {
+            "type": "string",
+            "example": "whsec_4f1c…",
+            "description": "HMAC-SHA256 signing key. Shown once, at creation, and never again."
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "events",
+          "secretFingerprint",
+          "active",
+          "createdAt",
+          "secret"
+        ]
+      },
+      "WebhookSubscriptionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmb1x…"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://ops.example.com/hooks/rivora"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "revenue.received",
+                "revenue.settled",
+                "risk.assessment.completed",
+                "credit.limit.updated",
+                "credit.draw.completed",
+                "credit.repayment.completed",
+                "borrower.watchlisted",
+                "borrower.restricted",
+                "borrower.defaulted",
+                "vault.utilization.changed"
+              ]
+            }
+          },
+          "secretFingerprint": {
+            "type": "string",
+            "example": "9f2c11ab",
+            "description": "First bytes of the secret’s SHA-256 — enough to tell two secrets apart, never enough to sign."
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-08-05T00:00:00.000Z"
+          },
+          "pendingDeliveries": {
+            "type": "number",
+            "example": 0,
+            "description": "Deliveries waiting for the dispatcher."
+          },
+          "exhaustedDeliveries": {
+            "type": "number",
+            "example": 0,
+            "description": "Deliveries dropped after every attempt failed."
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "events",
+          "secretFingerprint",
+          "active",
+          "createdAt",
+          "pendingDeliveries",
+          "exhaustedDeliveries"
+        ]
+      },
+      "WebhookListDto": {
+        "type": "object",
+        "properties": {
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookSubscriptionSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "subscriptions"
+        ]
+      },
+      "UpdateWebhookDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "example": "https://ops.example.com/hooks/rivora"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "revenue.received",
+                "revenue.settled",
+                "risk.assessment.completed",
+                "credit.limit.updated",
+                "credit.draw.completed",
+                "credit.repayment.completed",
+                "borrower.watchlisted",
+                "borrower.restricted",
+                "borrower.defaulted",
+                "vault.utilization.changed"
+              ]
+            }
+          },
+          "active": {
+            "type": "boolean",
+            "example": false,
+            "description": "A disabled subscription receives nothing and its queue exhausts."
+          }
+        }
+      },
+      "WebhookSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmb1x…"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://ops.example.com/hooks/rivora"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "revenue.received",
+                "revenue.settled",
+                "risk.assessment.completed",
+                "credit.limit.updated",
+                "credit.draw.completed",
+                "credit.repayment.completed",
+                "borrower.watchlisted",
+                "borrower.restricted",
+                "borrower.defaulted",
+                "vault.utilization.changed"
+              ]
+            }
+          },
+          "secretFingerprint": {
+            "type": "string",
+            "example": "9f2c11ab",
+            "description": "First bytes of the secret’s SHA-256 — enough to tell two secrets apart, never enough to sign."
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-08-05T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "events",
+          "secretFingerprint",
+          "active",
+          "createdAt"
         ]
       },
       "DrawRequestDto": {
@@ -4120,6 +6302,17 @@
             "example": 0,
             "description": "Part of the queued amount already funded."
           },
+          "queueAhead": {
+            "type": "number",
+            "example": 0,
+            "description": "Amount owed to exits ahead of this one. The queue is strictly FIFO, so this is what has to be funded before this position is served at all."
+          },
+          "queueClearanceDays": {
+            "type": "object",
+            "example": 4,
+            "nullable": true,
+            "description": "Settlement days until the whole queued amount is funded, at the current funding rate. Null when nothing is queued or the rate is zero — an estimate that cannot be made is reported as absent rather than as a date."
+          },
           "shareOfVaultPct": {
             "type": "number",
             "example": 19.85,
@@ -4136,72 +6329,9 @@
           "walletBalance",
           "queued",
           "queueFunded",
+          "queueAhead",
+          "queueClearanceDays",
           "shareOfVaultPct"
-        ]
-      },
-      "VaultPerformanceDto": {
-        "type": "object",
-        "properties": {
-          "displayedApyPct": {
-            "type": "number",
-            "example": 6,
-            "description": "What the vault displays, subsidy included."
-          },
-          "organicApyPct": {
-            "type": "number",
-            "example": 3.08,
-            "description": "Earned from borrower interest alone."
-          },
-          "subsidyApyPct": {
-            "type": "number",
-            "example": 2.92,
-            "description": "Paid from the protocol subsidy. Ends on the date below and is not guaranteed."
-          },
-          "subsidyEnds": {
-            "type": "string",
-            "example": "2026-10-30",
-            "description": "When the subsidy stops."
-          },
-          "blendedBorrowerRatePct": {
-            "type": "number",
-            "example": 12.1,
-            "description": "Blended rate paid by borrowers."
-          },
-          "protocolSpreadPct": {
-            "type": "number",
-            "example": 3,
-            "description": "Protocol’s share of borrower interest."
-          },
-          "interestGenerated": {
-            "type": "number",
-            "example": 184.2
-          },
-          "realizedLosses": {
-            "type": "number",
-            "example": 0
-          },
-          "coverageMultiple": {
-            "type": "number",
-            "example": 4.9,
-            "description": "First-loss cover over realised losses to date."
-          },
-          "weightedMeanPaybackDays": {
-            "type": "number",
-            "example": 26,
-            "description": "Weighted mean days to repay the book."
-          }
-        },
-        "required": [
-          "displayedApyPct",
-          "organicApyPct",
-          "subsidyApyPct",
-          "subsidyEnds",
-          "blendedBorrowerRatePct",
-          "protocolSpreadPct",
-          "interestGenerated",
-          "realizedLosses",
-          "coverageMultiple",
-          "weightedMeanPaybackDays"
         ]
       },
       "SnapshotOnlyResultDto": {
@@ -4298,6 +6428,72 @@
           "sharePct"
         ]
       },
+      "SectorExposureDto": {
+        "type": "object",
+        "properties": {
+          "sector": {
+            "type": "string",
+            "example": "Data lookup and static datasets"
+          },
+          "principal": {
+            "type": "number",
+            "example": 3940
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 46.5
+          },
+          "capPct": {
+            "type": "number",
+            "example": 40,
+            "description": "Share above which new draws are blocked."
+          },
+          "breached": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "sector",
+          "principal",
+          "sharePct",
+          "capPct",
+          "breached"
+        ]
+      },
+      "UpstreamExposureDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Model provider A"
+          },
+          "category": {
+            "type": "string",
+            "example": "compute"
+          },
+          "principal": {
+            "type": "number",
+            "example": 4930,
+            "description": "Principal exposed through this dependency, USDC."
+          },
+          "sharePct": {
+            "type": "number",
+            "example": 58.2
+          },
+          "substitutable": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "name",
+          "category",
+          "principal",
+          "sharePct",
+          "substitutable"
+        ]
+      },
       "ExposureReportDto": {
         "type": "object",
         "properties": {
@@ -4334,6 +6530,24 @@
             "example": 10,
             "description": "Per-borrower cap as a share of vault assets. PRD §31.5."
           },
+          "sectorCapPct": {
+            "type": "number",
+            "example": 40
+          },
+          "bySector": {
+            "description": "Principal by service category.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectorExposureDto"
+            }
+          },
+          "upstream": {
+            "description": "Concentration measured across borrowers — two services reselling the same provider are one dependency.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpstreamExposureDto"
+            }
+          },
           "breaches": {
             "type": "number",
             "example": 0,
@@ -4348,7 +6562,459 @@
           "largestExposure",
           "largestExposurePct",
           "perBorrowerCapPct",
+          "sectorCapPct",
+          "bySector",
+          "upstream",
           "breaches"
+        ]
+      },
+      "RiskAlertDto": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "restrict",
+              "warn",
+              "info"
+            ]
+          },
+          "who": {
+            "type": "string",
+            "example": "0x9c4e…a7f1",
+            "description": "Borrower handle, or `Sector`."
+          },
+          "text": {
+            "type": "string",
+            "example": "Coverage ratio 0.71 — probable partial diversion"
+          },
+          "meta": {
+            "type": "string",
+            "example": "WATCH · principal 840.00"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the condition was observed."
+          },
+          "href": {
+            "type": "string",
+            "example": "/risk/borrower?handle=0x9c4e…a7f1"
+          },
+          "cta": {
+            "type": "string",
+            "example": "Review"
+          }
+        },
+        "required": [
+          "severity",
+          "who",
+          "text",
+          "meta",
+          "href",
+          "cta"
+        ]
+      },
+      "LimitRecommendationDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "current": {
+            "type": "number",
+            "example": 2530,
+            "description": "Limit currently in force."
+          },
+          "recommended": {
+            "type": "number",
+            "example": 2100,
+            "description": "Limit the ladder produces from live inputs."
+          },
+          "bindingKey": {
+            "type": "string",
+            "example": "growthCap",
+            "description": "Which rung decided the recommendation."
+          },
+          "tier": {
+            "type": "string",
+            "example": "Standard"
+          },
+          "direction": {
+            "type": "string",
+            "example": "reduce",
+            "enum": [
+              "raise",
+              "reduce",
+              "hold"
+            ]
+          }
+        },
+        "required": [
+          "handle",
+          "current",
+          "recommended",
+          "bindingKey",
+          "tier",
+          "direction"
+        ]
+      },
+      "BorrowerFactorsDto": {
+        "type": "object",
+        "properties": {
+          "S": {
+            "type": "number",
+            "example": 0.95
+          },
+          "C": {
+            "type": "number",
+            "example": 0.86
+          },
+          "V": {
+            "type": "number",
+            "example": 0.9
+          },
+          "D": {
+            "type": "number",
+            "example": 0.95
+          },
+          "M": {
+            "type": "number",
+            "example": 0.88
+          },
+          "G": {
+            "type": "number",
+            "example": 1.1
+          }
+        },
+        "required": [
+          "S",
+          "C",
+          "V",
+          "D",
+          "M",
+          "G"
+        ]
+      },
+      "RiskTimelineEntryDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string",
+            "example": "Assessment #2 — score 68 → 78, limit 1,690 → 2,530"
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x39d5…8ca0"
+          }
+        },
+        "required": [
+          "at",
+          "text"
+        ]
+      },
+      "BorrowerRiskDetailDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "serviceName": {
+            "type": "string",
+            "example": "Quote Feed API"
+          },
+          "operator": {
+            "type": "string",
+            "example": "Ridgeline Data Ltd"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "example": "Estonia"
+          },
+          "kybVerifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "custody": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          },
+          "tier": {
+            "type": "string",
+            "example": "Strong"
+          },
+          "score": {
+            "type": "number",
+            "example": 78
+          },
+          "scoreDelta": {
+            "type": "number",
+            "example": 10,
+            "description": "Change since the previous assessment."
+          },
+          "principal": {
+            "type": "number",
+            "example": 2000
+          },
+          "accruedInterest": {
+            "type": "number",
+            "example": 8.42
+          },
+          "limit": {
+            "type": "number",
+            "example": 2530
+          },
+          "reserve": {
+            "type": "number",
+            "example": 248.6
+          },
+          "repaymentSharePct": {
+            "type": "number",
+            "example": 20
+          },
+          "ratePct": {
+            "type": "number",
+            "example": 12.1
+          },
+          "coverageRatio": {
+            "type": "number",
+            "example": 0.98
+          },
+          "hhi": {
+            "type": "number",
+            "example": 0.14
+          },
+          "factors": {
+            "description": "Exact values. Borrowers see bands.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BorrowerFactorsDto"
+              }
+            ]
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreComponentDto"
+            }
+          },
+          "timeline": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RiskTimelineEntryDto"
+            }
+          }
+        },
+        "required": [
+          "handle",
+          "serviceName",
+          "custody",
+          "status",
+          "tier",
+          "score",
+          "scoreDelta",
+          "principal",
+          "accruedInterest",
+          "limit",
+          "reserve",
+          "repaymentSharePct",
+          "ratePct",
+          "coverageRatio",
+          "hhi",
+          "factors",
+          "components",
+          "timeline"
+        ]
+      },
+      "ReinstateDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "example": "related wallets confirmed unrelated after review of the funding graph",
+            "description": "Why the restriction is being lifted. Recorded verbatim on the borrower record — a risk decision reversed without a stated reason is indistinguishable from one made carelessly."
+          }
+        },
+        "required": [
+          "note"
+        ]
+      },
+      "AnomalyEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "finding": {
+            "type": "string",
+            "example": "Payer 0x31aa…7c02 funded from operating wallet"
+          },
+          "at": {
+            "type": "string",
+            "example": "Jul 22 09:14 UTC"
+          },
+          "detail": {
+            "type": "string",
+            "example": "120.00 USDC"
+          },
+          "tx": {
+            "type": "string",
+            "example": "0x4a71…9f30"
+          }
+        },
+        "required": [
+          "finding",
+          "at",
+          "detail"
+        ]
+      },
+      "AnomalyWalletDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "0x31aa…7c02"
+          },
+          "fundedOn": {
+            "type": "string",
+            "example": "Jul 22"
+          },
+          "amount": {
+            "type": "number",
+            "example": 120
+          }
+        },
+        "required": [
+          "address",
+          "fundedOn",
+          "amount"
+        ]
+      },
+      "AnomalyAfterStateDto": {
+        "type": "object",
+        "properties": {
+          "eligibleRevenue": {
+            "type": "number",
+            "example": 11100
+          },
+          "score": {
+            "type": "number",
+            "example": 57
+          },
+          "tier": {
+            "type": "string",
+            "example": "Restricted"
+          },
+          "limit": {
+            "type": "number",
+            "example": 0
+          },
+          "repaymentBps": {
+            "type": "number",
+            "example": 3500
+          }
+        },
+        "required": [
+          "eligibleRevenue",
+          "score",
+          "tier",
+          "limit",
+          "repaymentBps"
+        ]
+      },
+      "AnomalyDetailDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "example": "A-0142"
+          },
+          "borrower": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "kind": {
+            "type": "string",
+            "example": "Circular funding"
+          },
+          "detectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "washAmount": {
+            "type": "number",
+            "example": 2400,
+            "description": "Revenue removed from the eligible base."
+          },
+          "payerCount": {
+            "type": "number",
+            "example": 3
+          },
+          "daysSpanned": {
+            "type": "number",
+            "example": 9
+          },
+          "netEconomicRevenue": {
+            "type": "object",
+            "example": -68,
+            "nullable": true,
+            "description": "Revenue net of the gas and fees spent generating it. Negative proves the activity was not economic. Null when it could not be measured — establishing it needs the payers’ own transaction costs, which the protocol cannot see, and a zero here would assert a measurement never taken."
+          },
+          "evidenceHash": {
+            "type": "string",
+            "example": "0x8b41…c07e"
+          },
+          "txHash": {
+            "type": "string",
+            "example": "0x0d31…44a9"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnomalyEvidenceDto"
+            }
+          },
+          "fundedWallets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnomalyWalletDto"
+            }
+          },
+          "after": {
+            "description": "Borrower state after the write-back.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AnomalyAfterStateDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reference",
+          "borrower",
+          "kind",
+          "detectedAt",
+          "washAmount",
+          "payerCount",
+          "daysSpanned",
+          "netEconomicRevenue",
+          "evidenceHash",
+          "txHash",
+          "evidence",
+          "fundedWallets",
+          "after"
         ]
       },
       "RiskParameterDto": {
@@ -4423,7 +7089,7 @@
           "source"
         ]
       },
-      "DefaultDeclarationResultDto": {
+      "DeclarationStatusDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -4438,7 +7104,37 @@
             "type": "number",
             "example": 1850
           },
-          "declaredAt": {
+          "trigger": {
+            "type": "string",
+            "example": "coverage ratio 0.31"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "committed"
+            ]
+          },
+          "signatures": {
+            "example": [
+              "0x90f7…b906"
+            ],
+            "description": "Operators who have signed. Distinct by construction.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required": {
+            "type": "number",
+            "example": 2,
+            "description": "Signatures required to commit."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "committedAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -4451,8 +7147,11 @@
           "id",
           "handle",
           "principal",
-          "declaredAt",
-          "notice"
+          "trigger",
+          "status",
+          "signatures",
+          "required",
+          "createdAt"
         ]
       },
       "AuditEntryDto": {
@@ -4492,6 +7191,211 @@
           "at",
           "actor",
           "action"
+        ]
+      },
+      "UsageDayDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-08-02",
+            "description": "Date, UTC."
+          },
+          "requests": {
+            "type": "number",
+            "example": 412
+          },
+          "billable": {
+            "type": "number",
+            "example": 398
+          }
+        },
+        "required": [
+          "date",
+          "requests",
+          "billable"
+        ]
+      },
+      "ApiUsageDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the window, inclusive."
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "End of the window, exclusive."
+          },
+          "requests": {
+            "type": "number",
+            "example": 14210,
+            "description": "Every request the key made, including failures."
+          },
+          "billable": {
+            "type": "number",
+            "example": 13980,
+            "description": "Successful calls on metered routes. Sandbox calls and errors are counted above but never charged."
+          },
+          "uniqueSubjects": {
+            "type": "number",
+            "example": 1884,
+            "description": "Distinct borrowers looked up. What a per-subject plan is priced on."
+          },
+          "errorRatePct": {
+            "type": "number",
+            "example": 0.04,
+            "description": "Share of requests that returned 4xx or 5xx."
+          },
+          "medianLatencyMs": {
+            "type": "number",
+            "example": 46,
+            "description": "Median round-trip the caller saw, milliseconds."
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent call."
+          },
+          "byDay": {
+            "description": "Daily totals, oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageDayDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "requests",
+          "billable",
+          "uniqueSubjects",
+          "errorRatePct",
+          "medianLatencyMs",
+          "byDay"
+        ]
+      },
+      "SandboxProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "07"
+          },
+          "description": {
+            "type": "string",
+            "example": "Standard, verified costs, custody A"
+          },
+          "endpoint": {
+            "type": "string",
+            "example": "https://sandbox.rivora.dev/synthetic/07"
+          }
+        },
+        "required": [
+          "id",
+          "description",
+          "endpoint"
+        ]
+      },
+      "SandboxScoreDto": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number",
+            "example": 78,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "Prime",
+              "Strong",
+              "Standard",
+              "Restricted",
+              "Ineligible"
+            ]
+          },
+          "recommendedLimit": {
+            "type": "number",
+            "example": 2530
+          },
+          "bindingKey": {
+            "type": "string",
+            "example": "growthCap",
+            "description": "Which rung of the ladder decided the limit."
+          },
+          "maxAdvanceRate": {
+            "type": "number",
+            "example": 0.25
+          },
+          "maxHorizonDays": {
+            "type": "number",
+            "example": 45
+          },
+          "reliabilityBand": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "MODERATE",
+              "LOW"
+            ]
+          },
+          "concentrationBand": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MODERATE",
+              "ELEVATED",
+              "HIGH"
+            ]
+          },
+          "custodyModel": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "example": 0.74,
+            "description": "How much weight to place on the assessment. Low confidence means thin inputs, not a bad borrower."
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreComponentDto"
+            }
+          },
+          "modelVersion": {
+            "type": "string",
+            "example": "riv-uw-2.1"
+          },
+          "sandbox": {
+            "type": "boolean",
+            "example": true,
+            "description": "Always true here. Sandbox responses carry no underwriter signature."
+          }
+        },
+        "required": [
+          "score",
+          "tier",
+          "recommendedLimit",
+          "bindingKey",
+          "maxAdvanceRate",
+          "maxHorizonDays",
+          "reliabilityBand",
+          "concentrationBand",
+          "custodyModel",
+          "confidence",
+          "components",
+          "modelVersion",
+          "sandbox"
         ]
       },
       "PartnerScoreDto": {
@@ -4558,6 +7462,219 @@
           "custody",
           "attestedAt",
           "model"
+        ]
+      },
+      "ApiKeySummaryDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "AgentMarket Inc"
+          },
+          "prefix": {
+            "type": "string",
+            "example": "pk_test_riv",
+            "description": "Leading characters, for recognition."
+          },
+          "scopes": {
+            "example": [
+              "score:read"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "label",
+          "prefix",
+          "scopes",
+          "active",
+          "createdAt"
+        ]
+      },
+      "PartnerConsoleDto": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeySummaryDto"
+            }
+          },
+          "usage": {
+            "description": "Aggregated across every key above.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ApiUsageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "keys",
+          "usage"
+        ]
+      },
+      "IngestPayerDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "payer-01",
+            "description": "Stable pseudonym. Never an address."
+          },
+          "amount": {
+            "type": "number",
+            "example": 184.5,
+            "description": "Settled to this payer on the day, USDC."
+          },
+          "requests": {
+            "type": "number",
+            "example": 4612
+          },
+          "excluded": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when this payer is excluded from the eligible base."
+          },
+          "exclusionReason": {
+            "type": "string",
+            "example": "Payer age below 7 days",
+            "description": "Required in practice when excluded — PRD §22.2 requires a reason per exclusion."
+          }
+        },
+        "required": [
+          "label",
+          "amount",
+          "requests"
+        ]
+      },
+      "IngestRevenueDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1",
+            "description": "Borrower handle."
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-08-03",
+            "description": "Settlement date, UTC. Date only."
+          },
+          "settled": {
+            "type": "number",
+            "example": 833.42,
+            "description": "Total settled on the day, USDC."
+          },
+          "requests": {
+            "type": "number",
+            "example": 20835,
+            "description": "Paid requests fulfilled on the day."
+          },
+          "failed": {
+            "type": "number",
+            "example": 412,
+            "description": "Paid requests the service failed to fulfil. Optional, and its absence is read as \"not reported\" rather than as zero — a service that never reports failures should not be scored as though it had none."
+          },
+          "refunded": {
+            "type": "number",
+            "example": 12.4,
+            "description": "Revenue refunded on the day, USDC. Feeds the refund rate."
+          },
+          "routed": {
+            "type": "number",
+            "example": 441,
+            "description": "Portion of the settled total that arrived through the Revenue Router, USDC. Feeds the routed-coverage ratio (PRD §11.5). Omit rather than send zero when routing was not observed — absence is read as \"not reported\", and a zero would read as \"diverted\"."
+          },
+          "payers": {
+            "description": "Per-payer breakdown. Without it the day still counts toward revenue, but concentration and diversity cannot be recomputed from it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngestPayerDto"
+            }
+          }
+        },
+        "required": [
+          "handle",
+          "date",
+          "settled",
+          "requests"
+        ]
+      },
+      "IngestResultDto": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "example": "0x9c4e…a7f1"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-08-03"
+          },
+          "settled": {
+            "type": "number",
+            "example": 833.42,
+            "description": "Settled revenue recorded for the day."
+          },
+          "excluded": {
+            "type": "number",
+            "example": 38.6,
+            "description": "Portion excluded from the eligible base."
+          },
+          "replaced": {
+            "type": "boolean",
+            "example": true,
+            "description": "True when this replaced an earlier reading for the same day."
+          },
+          "windowEligible": {
+            "type": "number",
+            "example": 14040,
+            "description": "Eligible revenue over the window after the write."
+          },
+          "reassessed": {
+            "type": "boolean",
+            "example": true,
+            "description": "True when the window moved enough to trigger an assessment. PRD §16.6 lists a material revenue change as a trigger."
+          }
+        },
+        "required": [
+          "handle",
+          "date",
+          "settled",
+          "excluded",
+          "replaced",
+          "windowEligible",
+          "reassessed"
+        ]
+      },
+      "IngestBatchDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngestRevenueDto"
+            }
+          }
+        },
+        "required": [
+          "days"
         ]
       }
     }

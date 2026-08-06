@@ -5,6 +5,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { SnapshotService } from '../snapshot/snapshot.service';
 import { makeState, makeTxClient } from '../testing/ledger-fixture';
 import { VaultService } from './vault.service';
+import { WebhookEmitter } from '../webhook/webhook-emitter.service';
 
 function build(state = makeState()) {
   const tx = makeTxClient();
@@ -27,7 +28,10 @@ function build(state = makeState()) {
   // transaction client already answers with the seeded book total.
   const prisma = tx.client as unknown as PrismaService;
 
-  return { service: new VaultService(snapshots, ledger, prisma), tx };
+  return {
+    service: new VaultService(snapshots, ledger, prisma, { emit: vi.fn(async () => undefined) } as unknown as WebhookEmitter),
+    tx,
+  };
 }
 
 describe('deposit', () => {
