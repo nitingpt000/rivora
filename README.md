@@ -143,6 +143,24 @@ Settlement is a keeper hook, not a user action: nothing anyone clicks moves the 
 
 ---
 
+## Circle and Arc
+
+What the protocol is actually built on, and how honestly each piece is in use (PRD §30):
+
+| Service | Role here | Status |
+| --- | --- | --- |
+| **USDC** | The only asset — settlement, credit, repayment, reserves, gas — and the EIP-712 verifying contract for payment signatures. Two scales on Arc: 18 decimals as native gas, 6 through the ERC-20 at `0x3600…0000`; protocol figures use the 6. | Live everywhere |
+| **Circle Developer-Controlled Wallets** | The protocol signer in arc mode. Circle holds the key; the API holds credentials; no key material touches the process. This wallet deployed the contracts and signed the live-fired draws, repayments and assessment exports. | Active with `CHAIN_MODE=arc` |
+| **Circle Contracts (SCP)** | Every deployment — the protocol redeploy and the revenue router — went through Circle's contract platform rather than a local key. | Used for all deployments |
+| **Nanopayments / x402** | The revenue rail. `GET /x402/quote` serves a real 402 challenge and verifies EIP-3009 authorizations with single-use nonces; revenue lands in the underwriting book. Circle's settle API is not yet called — serving on signature strength without batch settlement is the documented gap. | Origination live; settlement simulated |
+| **Circle Gateway** | The pull-based-router finding below comes from its settlement model, and its `GET /v1/x402/transfers` — settled authorizations with payer addresses — is the Circle-attested feed that will make payer attribution trustless (verified against the testnet API; backlog item 8). | Researched, not integrated |
+| **Arc Testnet** (`5042002`) | Where the four contracts live. Chosen for USDC-native gas and sub-second deterministic finality — credit accounting in the same asset as gas, revenue and repayment. | Deployed and live-fired |
+| **Arc public RPC** | Registry nonces, confirmations, and the reconciling indexer's `getLogs` polling. | Active in arc mode |
+
+The running demo is in ledger mode, so what exercises continuously is USDC-denominated accounting and x402 origination; the wallet, RPC and contracts engage when a deployment opts into `CHAIN_MODE=arc`, which is how the live-fire evidence in [backlog.md](backlog.md) was produced.
+
+---
+
 ## Wallet
 
 `@rivora/wallet` wraps wagmi and viem behind one provider, one hook and one chain definition. Screens import `useWallet`, never wagmi directly, so the product has a single answer to "who is connected and to what".
