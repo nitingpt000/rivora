@@ -4,29 +4,32 @@ A stablecoin-native credit protocol for machine businesses — an implementation
 
 Rivora underwrites AI APIs, MCP servers and autonomous agents from their verifiable onchain revenue, extends a USDC credit line, and repays it automatically from a routed share of future revenue.
 
-> **Arc Testnet. Test assets only, no real value.** Protocol state is served by a fixture-backed mock backend; there is no chain, no indexer and no money. Wallet connection is real.
+> **Arc Testnet. Test assets only, no real value.** Protocol state is served by the real API — NestJS, Prisma, PostgreSQL — over a seeded demo dataset. The contracts are deployed on Arc testnet and have been live-fired; the running stack keeps money movement in ledger mode until a deployment opts into `CHAIN_MODE=arc`. Wallet connection and Sign-In With Ethereum are real.
+
+**Live demo:** [rivora.hyperemblem.com](https://rivora.hyperemblem.com) · API docs at [api-rivora.hyperemblem.com/docs](https://api-rivora.hyperemblem.com/docs)
 
 ---
 
 ## Quick start
 
+The web app has no backend of its own — bring up the API first, then point the app at it.
+
 ```bash
 pnpm install
-pnpm dev
+docker compose up --build -d     # Postgres, migrations, the seeded book, API on :4000
+pnpm dev                         # the app on :3000
 ```
 
-The app runs at http://localhost:3000. Start at `/connect` and connect a wallet — the address resolves to a surface (borrower, liquidity provider, risk operator, partner), and an unregistered address gets a role picker.
-
-No `.env` file is needed to run: every variable has a working default. Copy [.env.example](.env.example) to `.env.local` when pointing at a real network or backend.
+`apps/web/.env.local` must carry `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000` (see [.env.example](.env.example)) — without it every request goes unanswered, by design. Start at `/connect` and connect a wallet: the address resolves to a surface (borrower, liquidity provider, risk operator, partner), and an unregistered address gets onboarding.
 
 ```bash
 pnpm build       # production build of every package and the app
-pnpm test        # domain, ledger and store tests (85)
+pnpm test        # API, domain and store tests (274)
 pnpm typecheck   # tsc across the workspace
 pnpm lint        # eslint across the workspace
 ```
 
-Requires Node ≥ 20.11 and pnpm 10.
+Requires Node ≥ 20.11, pnpm 10 and Docker. The contract suite (54 tests) needs Foundry and runs with `pnpm --filter @rivora/contracts test`.
 
 ---
 
@@ -34,7 +37,7 @@ Requires Node ≥ 20.11 and pnpm 10.
 
 ```text
 apps/
-  web/                  Next.js 15 App Router — 34 routes, 41 screens, 13 API handlers
+  web/                  Next.js 15 App Router — 34 routes, 41 screens, no API handlers
   api/                  NestJS + Prisma + PostgreSQL. The real backend.
 contracts/              Solidity for Arc. Foundry.
 packages/
@@ -93,7 +96,7 @@ Run the backend:
 docker compose up --build
 ```
 
-Postgres comes up, migrations apply, the canonical dataset seeds, and the API listens on `:4000` with Swagger at [localhost:4000/docs](http://localhost:4000/docs). Point the web app at it with `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000` and the Next handlers stop being used.
+Postgres comes up, migrations apply, the canonical dataset seeds, and the API listens on `:4000` with Swagger at [localhost:4000/docs](http://localhost:4000/docs). Every route the product uses is on this server — the web app ships no handlers of its own.
 
 See [apps/api/README.md](apps/api/README.md).
 
@@ -101,15 +104,15 @@ See [apps/api/README.md](apps/api/README.md).
 
 ## Contracts
 
-Four Solidity contracts for Arc — credit vault, credit manager, revenue router, risk registry. See [contracts/README.md](contracts/README.md).
+Four Solidity contracts for Arc — credit vault, credit manager, revenue router, risk registry — deployed on Arc testnet (addresses in [contracts/deployments/arc-testnet.json](contracts/deployments/arc-testnet.json)) and live-fired: real assessments exported through the registry, a real draw through the manager, real revenue split 20/2/78 through the router. See [contracts/README.md](contracts/README.md), and [contracts/AUDIT.md](contracts/AUDIT.md) for the stated invariants and internal review findings.
 
 ```bash
-pnpm --filter @rivora/contracts test    # 48 tests, needs Foundry
+pnpm --filter @rivora/contracts test    # 54 tests, needs Foundry
 ```
 
 **The router is pull-based, and that is a finding rather than a preference.** The PRD assumed it could be the nanopayment settlement destination, so a settling batch would call it and the waterfall would run atomically. Circle Nanopayments instead settles into the seller's **Gateway balance**; funds reach Arc only when a burn intent withdraws them, and that arrives as a plain ERC-20 transfer, which executes no code. `distributeRevenue()` is therefore permissionless and operates on the balance it holds.
 
-The consequence is economic, not just technical: if the borrower controls the Gateway balance, repayment is behavioural rather than structural — PRD §11.2 Model C at a 25% advance rate, not Model A at 100%. The advance-rate table in §11.3 needs re-grading, and whether Rivora can hold the withdrawal right via a Circle Developer-Controlled Wallet is a question for Circle.
+The consequence is economic, not just technical: if the borrower controls the Gateway balance, repayment is behavioural rather than structural — PRD §11.2 Model C at a 25% advance rate, not Model A at 100%. Whether Rivora can hold the withdrawal right via a Circle Developer-Controlled Wallet remains the open custody question; the companion attribution question is answered — Gateway's `GET /v1/x402/transfers` lists settled authorizations with payer addresses (see [backlog.md](backlog.md) item 8).
 
 **The Solidity is pinned to `@rivora/core` by differential tests** that run the real TypeScript and compare. The borrower sees a preview from one and signs a transaction executed by the other; if they disagree, the number consented to is not the number that ran. That test caught three genuine divergences on its first run.
 
@@ -120,18 +123,21 @@ What that buys today:
 - **Mutations return the whole snapshot,** not a patch, so the client either has the server's state or knows it failed. There is no merge to get wrong.
 - **One flattening adapter.** `applySnapshot` is the only place the nested wire contract becomes the flat shape 41 screens read.
 
+The API serves 59 routes under `/api/v1`; the full contract is the Swagger document at `/docs`. The load-bearing ones:
+
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/snapshot` | One consistent read of all protocol state |
-| `GET /api/session?address=` | Resolve a wallet to a role |
-| `GET /api/activity` | Public event stream |
-| `POST /api/credit/draw`, `/repay` | Borrower money movement |
-| `POST /api/vault/deposit`, `/withdraw` | LP money movement |
-| `POST /api/vault/queue/claim`, `/cancel` | FIFO exit queue |
-| `POST /api/custody/restore-binding` | Re-verify the router binding |
-| `POST /api/services` | Register a service out of onboarding |
-| `POST /api/settlement/tick` | Keeper hook — accrual and revenue routing |
-| `POST /api/admin/reset` | Restore the seeded book (development only) |
+| `POST /auth/nonce`, `/auth/verify` | SIWE sign-in — a verified signature becomes a role-carrying JWT |
+| `GET /snapshot` | One consistent read of all protocol state (session) |
+| `GET /protocol/stats`, `/activity`, `/defaults`, `/reputation/:handle` | The public surface — no session required |
+| `POST /credit/draw`, `/repay` | Borrower money movement, policy-checked server-side |
+| `POST /vault/deposit`, `/withdraw`, `/vault/queue/claim`, `/cancel` | LP money movement and the FIFO exit queue |
+| `POST /ingest/revenue` | The indexer's write side — every window aggregate is derived, never accepted |
+| `GET /x402/quote` | A real paid endpoint: 402 challenge, EIP-3009 verification, revenue into the book |
+| `POST /risk/defaults/declare`, `/:id/approve` | Two-operator default quorum |
+| `GET /partner/score/:handle` | The metered score API, key-authenticated |
+| `POST /webhooks` | Operator-registered webhook subscriptions for the ten PRD §27 events |
+| `POST /settlement/tick` | Keeper hook — accrual and revenue routing |
 
 Settlement is a keeper hook, not a user action: nothing anyone clicks moves the protocol clock.
 
@@ -239,8 +245,6 @@ Draw, repay, deposit and withdraw are modals rather than routes — each is an a
 
 **The snapshot refreshes every 30 seconds** while the tab is visible, pausing when hidden and firing immediately on return. A failed background refresh leaves the last good snapshot on screen rather than flashing an error over figures that are still valid.
 
-**The mock backend's book lives on `globalThis`** so Next's dev server keeps one ledger across hot reloads. It is in-memory and per-instance by design — the one thing a real deployment must replace.
-
 ---
 
 ## Conventions
@@ -253,27 +257,30 @@ Draw, repay, deposit and withdraw are modals rather than routes — each is an a
 
 ---
 
-## What is not here
+## What is real, and what is not yet
 
-The API is the ledger of record. Money movement is a database transaction, not
-yet a contract call: `ChainService` has both a database-backed and a
-viem-backed implementation, and `CHAIN_MODE=arc` selects the second. Until that
-is switched on, the contracts hold no funds and the book lives in PostgreSQL.
+The API is the ledger of record. `ChainService` has two implementations and
+`CHAIN_MODE` selects between them: `ledger` keeps money movement in
+PostgreSQL with deterministic stand-in hashes, `arc` broadcasts through a
+Circle Developer-Controlled Wallet — no key material ever touches the
+process. Arc mode has been live-fired against the testnet deployment: real
+assessment exports, a real draw, real revenue distributed through the router
+onchain, with the reconciling indexer matching chain events to ledger rows
+and alarming on divergence in either direction. Deployments default to
+ledger mode because broadcasting value should be a deliberate choice, never
+what happens when a variable is unset.
 
-What is genuinely missing: an indexer reconciling the database against chain
-events, per-payer attribution through Circle's net batch settlement, an
-operator quorum for declaring a default (PRD §33 — still single-signature), and
-an audit. The contracts hold liquidity-provider funds; nothing here substitutes
-for one.
+Every PRD §36 acceptance criterion passes: x402 origination with real
+EIP-3009 verification, derived-not-asserted underwriting inputs, the
+detection loop that restricts a borrower manufacturing revenue, the
+two-operator default quorum, webhooks for all ten §27 events, and the AI
+narration that explains a decision it cannot influence.
 
-Wallet connection and Sign-In With Ethereum are genuinely wired — the signature
-is verified server-side and the session is a real JWT. No *value-bearing*
-transaction is signed or broadcast yet: a draw is a POST, not a contract call.
-The Arc chain id, RPC and USDC address in `.env.example` are the live testnet
-values; note that USDC has two scales on Arc — 18 decimals as the native gas
-token and 6 through its ERC-20 interface, and protocol figures use the 6.
-
-Known gaps are tracked in [backlog.md](backlog.md) rather than left implicit —
-including two screens that still compute real arithmetic over literal inputs.
-
-The five open questions in PRD §42.2 that gate the custody model are unanswered by design: whether an arbitrary contract can be a nanopayment settlement destination, and whether per-payer attribution survives net batch settlement, determine whether the diversity and concentration factors are computable at all.
+What stands between this and production is recorded, not implied —
+[backlog.md](backlog.md) item 19 is the gate list: an external contract
+audit (an internal adversarial review found and fixed a critical exit-queue
+bug; nothing substitutes for fresh eyes), settlement through Circle's
+production interfaces rather than signature-verified simulation, legal
+review — lending is a regulated activity — and the smaller items behind
+them. Until that list is worked through, this is a complete testnet
+protocol, and it says so on every page.
