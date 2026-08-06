@@ -255,7 +255,7 @@ the fixture ledger does not record movements the chain remembers.
 
 ---
 
-## ~~8. Per-payer attribution through net batch settlement~~ — priced; one question left for Circle
+## ~~8. Per-payer attribution through net batch settlement~~ — priced; the Circle question is answered
 
 PRD §11.7 items 4–5, and PRD §42.2.
 
@@ -297,14 +297,41 @@ Verified live against the running stack: 100% attributed baseline → an
 unattributed day drops coverage to 96.79% and adds the presumed payer → a
 corrected re-post restores 100%.
 
-**Still open, and precisely one question for Circle:** does Gateway expose
-(or plan) a seller-scoped API listing settled authorizations — payer address,
-amount, timestamp, batch — attested by Circle, such that a third party the
-seller authorises can compute payer concentration without trusting the
-seller's own logs? Until the answer is yes, attribution-grade underwriting
-requires either Rivora operating the x402 verifier in the request path, or
-accepting borrower-attested logs at a reduced advance rate — which is what
-the formula now prices.
+**~~Still open, and precisely one question for Circle~~ — answered
+2026-08-05, empirically.** The feed exists. The Gateway OpenAPI spec
+(`developers.circle.com/openapi/gateway.yaml`) defines
+`GET /v1/x402/transfers` on `gateway-api-testnet.circle.com` /
+`gateway-api.circle.com`: cursor-paginated, filterable by `from`, `to`,
+network, status, EIP-3009 nonce and date range. Each transfer carries the
+payer (`fromAddress`), recipient, atomic amount, nonce, a lifecycle status
+(`received → batched → confirmed → completed`) and the **batch-level
+settlement `txHash`** — so per-payer attribution survives net settlement:
+authorizations are listed individually and joinable to their batch. Verified
+against the live testnet API: an unauthenticated query filtered to nothing
+returned real Arc-testnet transfers (`eip155:5042002`) with payer addresses.
+
+Three caveats before underwriting leans on it:
+
+- **The endpoints declare no auth.** The spec attaches no security
+  requirement to the two transfer reads (webhook subscription routes require
+  bearer auth) and the testnet answers without credentials. If production
+  behaves the same way, anyone can enumerate any seller's payer flow — which
+  answers the attribution question and raises a §21 privacy one: the
+  disclosure tiers assume payer identities are not one public GET away.
+- **Nothing this protocol originates appears in the feed yet.** The x402
+  endpoint here verifies EIP-3009 signatures locally and never submits to
+  Circle's `/v1/x402/settle`, so its revenue does not exist in Gateway.
+  Consuming the feed means either settling through Circle or treating it as
+  reconciliation for revenue that already settles through Gateway.
+- **`txHash` is null until batching**, so attribution-by-feed is
+  eventually-consistent on the settlement clock — same as everything else in
+  this book.
+
+What this buys once wired: `to=<router>` over a date window is a
+Circle-attested payer breakdown an indexer can post through the existing
+`/ingest/revenue` path, lifting `attributedPct` without trusting
+borrower-run infrastructure — the exact condition under which the formula
+stops pricing revenue as one presumed payer.
 
 ---
 
@@ -356,12 +383,12 @@ A second finding beside it: funding read the whole balance, including money
 already promised to earlier entries and not yet withdrawn, so two providers
 could be promised the same dollars. Both are fixed, with tests. Suite is 51.
 
-**The deployed testnet instances still carry both.** They were deployed
-before the fix. Exposure is nil today — `queueLength() == 0`, no exit has
-ever queued — but the live vault must be treated as vulnerable the moment
-anyone queues one. Redeploying needs the admin wallet to re-grant
-`UNDERWRITER_ROLE` and re-register borrowers, so it is a deliberate step, not
-a background one.
+~~**The deployed testnet instances still carry both.**~~ — no longer true,
+and this note outlived the fact. The exit-queue fix (`06794c6`) is an
+ancestor of the 2026-08-04 redeployment commit (`3c7c0d1`), so the contracts
+at the item-14 addresses were built from a tree that includes it. The *old*
+vault — the one item 14's recovery withdrawal ran against — still carries
+both bugs, which is one more reason nothing should point at it.
 
 **What an audit should still buy:** a stateful invariant campaign (the
 invariants are written down but only unit-tested), the paths this review
@@ -732,6 +759,103 @@ than a step in the wizard, and the wizard's `deployRouter` remains a local
 flag. Making it a real step needs the deploy path to run under a borrower's
 own credentials rather than the protocol's, which is a custody question
 before it is a UI one.
+
+---
+
+## ~~18. Webhooks (§27) did not exist~~ — closed
+
+The PRD lists ten webhook events under API requirements; the backlog's own
+PRD audit (item 13) missed them, which is worth recording — an audit's blind
+spots are findable only by auditing the audit. There was no webhook code of
+any kind: notifications existed as an in-app feed and nothing left the
+process.
+
+Outbox, not fire-and-forget. `WebhookEmitter.emit` runs inside the same
+`ledger.run` transaction as the domain change it reports, so an event exists
+if and only if the change committed — a delivery cannot describe a draw that
+rolled back. Fan-out to matching subscriptions happens at emission, so a
+subscription created tomorrow does not inherit history, and an event nobody
+subscribed to writes nothing. The dispatcher is the indexer's lifecycle
+pattern verbatim: interval, re-entrancy guard, public `tick()` for the tests.
+
+Delivery is at-least-once: HMAC-SHA256 over the raw body
+(`x-rivora-signature`), 2xx marks delivered, anything else backs off
+doubling from 30s until `WEBHOOK_MAX_ATTEMPTS` (8 ≈ two hours) exhausts it —
+one ops alert per dead subscription, not per delivery, deduplicated the way
+the indexer's divergence alerts are. Receivers deduplicate on the event id,
+carried in both the envelope and `x-rivora-delivery`.
+
+A subscriber URL is an SSRF surface twice: at registration and at every
+delivery, because DNS is not fixed. Both ends run the endpoint probe's
+resolve-and-refuse check, lifted to `common/private-address.ts` so there is
+one list of refused ranges. A target that goes private is exhausted, not
+retried — retrying an SSRF attempt on a schedule would be worse than making
+it once. `WEBHOOK_ALLOW_PRIVATE` waives this for the compose stack, where
+every reachable receiver is a private address by definition.
+
+Subscriptions are operator-registered (`/webhooks`, `@Roles('ops')`), every
+mutation audited, and the secret is shown once at creation — the console
+gets a fingerprint. Emission points: ingestion (`revenue.settled`,
+`revenue.received`), assessment (`risk.assessment.completed`, and
+`credit.limit.updated` only when the enforced limit moved), draw and manual
+repay, settlement's automatic repayment (`source: 'settlement'`), the
+detectors (`borrower.watchlisted` / `borrower.restricted`), the default
+quorum commit, and every liquidity movement (`vault.utilization.changed`,
+computed at the five write points because utilization is derived, never
+stored).
+
+**Verified live, including the failure path by accident.** A subscription
+registered over the API received a real draw and repay: four events, every
+signature verified by an independent receiver recomputing the HMAC. The
+receiver crashed on first contact (its own bug), so the deliveries that
+arrived did so through the retry path — emitted 05:45:12, delivered
+05:46:42, exactly the 30s+60s backoff. Eight unit tests beside the two
+services.
+
+---
+
+## 19. Production gate — what stands between the testnet MVP and real money
+
+Recorded 2026-08-05. Every PRD §36 acceptance criterion passes and the
+testnet stack is complete, which is exactly when the remaining distance is
+easiest to understate. This entry is the honest list, in order of severity.
+The PRD's own answer to "how do we launch" is §34: a **permissioned network
+with known operators and protocol-seeded first loss** — that is the bar
+this list gates, not open lending.
+
+1. **External contract audit** (item 10). The vault holds lender funds, and
+   the internal review already found a critical double-payment bug — which
+   is evidence the process works *and* evidence an external audit is
+   non-negotiable. The 14 invariants are written down but only unit-tested;
+   an audit should bring a stateful invariant campaign.
+2. **Real settlement does not exist yet.** The x402 endpoint verifies
+   EIP-3009 signatures but never submits to Circle's `/v1/x402/settle` — no
+   money moves for originated revenue. PRD §11.7's questions about
+   registering a contract as a nanopayment settlement destination remain
+   unverified against production interfaces. Until revenue provably lands
+   in the router on mainnet, "structural repayment" is a testnet claim.
+3. **Lending is a regulated activity.** PRD §32 exists for a reason:
+   extending credit of real value across jurisdictions to pseudonymous
+   counterparties needs legal review before any mainnet switch. Bigger than
+   any code item on this list.
+4. **The dev seed must be unreachable from anything real** (item 3's
+   residual). Public Anvil keys with granted roles are safe only because
+   the database is local; nothing but discipline keeps that seed out of a
+   shared environment. Production needs an enforced guarantee — a seed that
+   refuses to run where dev sessions are off would be a start.
+5. **Operational basics.** One Postgres with no backup or failover story;
+   uptime still a score-feeding fixture with no monitoring loop (smaller
+   items); secrets in env files; the LP exit queue modeled as one row per
+   provider where the Solidity keeps a real FIFO.
+6. **Two open questions for Circle** (item 8's tail): the production auth
+   posture of `GET /v1/x402/transfers` — on testnet it answers without
+   credentials, and if production matches, every seller's payer flow is
+   publicly enumerable, which collides with §21's disclosure tiers — and
+   whether a settlement-destination change is observable at useful latency,
+   which is what makes Model A's anti-diversion claim real.
+
+Items 1–3 gate the launch; 4–6 are closable incrementally and should not
+wait for it.
 
 ---
 
