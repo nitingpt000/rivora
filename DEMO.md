@@ -39,21 +39,23 @@ Fallback if the network dies mid-demo: the local stack
 
 ## The script
 
-### 0:00 – 0:20 · The problem — Tab 1, landing
+### 0:00 – 0:25 · What Rivora is, and the problem — Tab 1, landing
 
-**Do:** scroll slowly from the hero to the live-state tiles.
+**Do:** open on the hero, then scroll slowly to the live-state tiles.
 
 **Say:**
-> "This is QuoteStream — an AI market-data API that earns fourteen thousand
-> dollars a month in sub-cent USDC payments, thousands per day. It has
-> revenue, customers and margin — and no bank account, no credit file, no
-> collateral. No lender on earth will underwrite it. Rivora does, from the
-> one thing it *can* prove: revenue the protocol observes onchain. And
-> every number on this page is the live book — including our 15.6% default
-> rate. We publish the unflattering numbers on the same surface as the ones
-> that flatter us."
+> "**Rivora is a stablecoin-native credit protocol on Arc** — working
+> capital for businesses that are software: AI APIs, MCP servers,
+> autonomous agents. Here's why they need it. This is QuoteStream — an AI
+> market-data API earning fourteen thousand dollars a month in sub-cent
+> USDC payments. It has revenue, customers and margin — and no bank
+> account, no credit file, no collateral. No lender on earth will
+> underwrite it. Rivora does, from the one thing it *can* prove: revenue
+> the protocol observes onchain. And every number on this page is the live
+> book — including our 15.6% default rate. We publish the unflattering
+> numbers on the same surface as the ones that flatter us."
 
-### 0:20 – 0:45 · Machines paying machines — terminal, then Tab 2
+### 0:25 – 0:45 · Machines paying machines — terminal, then Tab 2
 
 **Do:** run the prepared command; while it prints `402 → sign → 200` three
 times, switch to Tab 2 (**/revenue**) and refresh.
